@@ -43,7 +43,7 @@
     items.forEach(item => {
       imageCache[item.id] = {
         filename: item.filename,
-        imageUrl: `${baseUrl}/api/storage/${item.storage_path}`,
+        imageUrl: `${baseUrl}/${item.storage_path}`,
         width: item.width,
         height: item.height
       };
