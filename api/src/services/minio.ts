@@ -11,7 +11,7 @@ const s3Client = new S3Client({
   forcePathStyle: true, // Required for MinIO
 });
 
-export type LabelType = 'detection' | 'text-qa' | 'classify';
+export type LabelType = 'detection' | 'multimodal' | 'text-qa' | 'classify';
 
 interface StoreOptions {
   type: LabelType;

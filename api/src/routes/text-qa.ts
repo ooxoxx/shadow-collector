@@ -19,6 +19,10 @@ textQaRoute.post('/', async (c) => {
       taskId: metadata.taskId,
       batchId: metadata.batchId,
       annotations: metadata.annotations,
+      // Upload metadata
+      uploadTime: metadata.uploadTime,
+      uploadIP: metadata.uploadIP,
+      // Storage metadata
       storedAt: new Date().toISOString(),
     };
 
