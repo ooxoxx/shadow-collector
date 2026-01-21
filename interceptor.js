@@ -28,6 +28,41 @@
   // 图像分类元数据缓存 { imageId: { filename, imageUrl, width, height, taskId } }
   const classifyCache = {};
 
+  // 客户端本地IP缓存
+  let clientIP = null;
+
+  // 通过 WebRTC 获取本地IP
+  async function getLocalIP() {
+    if (clientIP) return clientIP;
+
+    return new Promise((resolve) => {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const ipMatch = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+          if (ipMatch) {
+            clientIP = ipMatch[0];
+            console.log(`🌐 已获取本地IP: ${clientIP}`);
+            resolve(clientIP);
+            pc.close();
+          }
+        }
+      };
+
+      // 超时fallback
+      setTimeout(() => {
+        pc.close();
+        resolve(null);
+      }, 1000);
+    });
+  }
+
+  // 初始化时获取IP
+  getLocalIP();
+
   function matchPattern(url) {
     for (const [name, pattern] of Object.entries(API_PATTERNS)) {
       if (pattern.test(url)) return name;
@@ -140,7 +175,9 @@
       width: imageInfo?.width,
       height: imageInfo?.height,
       annotations,
-      imageBase64  // 完整 base64 数据
+      imageBase64,  // 完整 base64 数据
+      uploadTime: new Date().toISOString(),
+      uploadIP: clientIP
     };
 
     console.log("%c 📦 Payload 已构建 (未发送):", "color: orange;", {
@@ -215,7 +252,9 @@
       taskId: fileInfo?.taskId,
       batchId: fileInfo?.batchId,
       annotations,
-      fileBase64
+      fileBase64,
+      uploadTime: new Date().toISOString(),
+      uploadIP: clientIP
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -290,7 +329,9 @@
       width: imageInfo?.width,
       height: imageInfo?.height,
       labelIds,
-      imageBase64
+      imageBase64,
+      uploadTime: new Date().toISOString(),
+      uploadIP: clientIP
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
