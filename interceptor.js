@@ -3,15 +3,30 @@
   console.log(">>> 🚀 ShadowCollector: 全能拦截器已注入 (Fetch + XHR)...");
 
   // ==========================================
-  // API 模式匹配 - 目标检测
+  // API 模式匹配
   // ==========================================
   const API_PATTERNS = {
+    // 目标检测
     DETECTION_LIST: /\/api\/sampleListOfTask/,
     DETECTION_LABEL: /\/api\/updateLabelInfo\/[a-f0-9]{32}\/[a-f0-9]{32}\/label/,
+
+    // 文本质检
+    TEXT_QA_INFO: /\/api\/get_json\/[a-f0-9]{32}$/,
+    TEXT_QA_LABEL: /\/api\/pass_json\/[a-f0-9]{32}$/,
+
+    // 图像分类
+    CLASSIFY_LIST: /\/api\/classifyTasksList\/[a-f0-9]{32}\/\d+/,
+    CLASSIFY_LABEL: /\/api\/classifyTaskDataLabel\/[a-f0-9]{32}\/[a-f0-9]{32}$/,
   };
 
   // 图片元数据缓存 { imageId: { filename, imageUrl, width, height } }
   const imageCache = {};
+
+  // 文本质检元数据缓存 { fileId: { filename, rawFileUrl, taskId, batchId } }
+  const textQACache = {};
+
+  // 图像分类元数据缓存 { imageId: { filename, imageUrl, width, height, taskId } }
+  const classifyCache = {};
 
   function matchPattern(url) {
     for (const [name, pattern] of Object.entries(API_PATTERNS)) {
@@ -52,15 +67,15 @@
     console.log(`📦 已缓存 ${items.length} 张图片信息`);
   }
 
-  // 下载图片并返回 Blob
-  async function downloadImage(imageUrl) {
+  // 下载文件并返回 Blob
+  async function downloadFile(fileUrl) {
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetch(fileUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       return blob;
     } catch (err) {
-      console.error("图片下载失败:", err);
+      console.error("文件下载失败:", err);
       return null;
     }
   }
@@ -105,7 +120,7 @@
 
     if (imageInfo?.imageUrl) {
       console.log("%c 正在下载图片...", "color: yellow;");
-      imageBlob = await downloadImage(imageInfo.imageUrl);
+      imageBlob = await downloadFile(imageInfo.imageUrl);
 
       if (imageBlob) {
         imageBase64 = await blobToBase64(imageBlob);
@@ -131,6 +146,156 @@
     console.log("%c 📦 Payload 已构建 (未发送):", "color: orange;", {
       ...payload,
       imageBase64: payload.imageBase64 ? `[${(imageBase64.length / 1024).toFixed(1)} KB base64]` : null
+    });
+    console.groupEnd();
+
+    return payload;
+  }
+
+  // 处理 TEXT_QA_INFO 响应 - 缓存文件信息
+  function handleTextQAInfo(url, resData) {
+    const match = url.match(/\/api\/get_json\/([a-f0-9]{32})/);
+    if (!match) return;
+
+    const fileId = match[1];
+    const baseUrl = getBaseUrl(url);
+    const data = resData?.data;
+
+    if (data) {
+      textQACache[fileId] = {
+        filename: data.filename,
+        rawFileUrl: `${baseUrl}/${data.raw_filepath}`,
+        taskId: data.task_id,
+        batchId: data.batch_id,
+      };
+      console.log(`📄 已缓存文本质检文件: ${data.filename}`);
+    }
+  }
+
+  // 处理 TEXT_QA_LABEL 请求 - 下载原文件并构建 payload (异步)
+  async function handleTextQALabel(url, reqBody) {
+    const match = url.match(/\/api\/pass_json\/([a-f0-9]{32})/);
+    if (!match) return null;
+
+    const fileId = match[1];
+    const body = parseBody(reqBody);
+    const fileInfo = textQACache[fileId];
+
+    // 解析标注数据
+    let annotations = null;
+    try {
+      annotations = JSON.parse(body?.jsonStr || "{}");
+    } catch {
+      console.warn("标注数据解析失败");
+    }
+
+    console.group("📋 文本质检配对结果");
+    console.log("%c 原文件:", "color: cyan;", fileInfo?.rawFileUrl || "未找到");
+
+    // 下载原文件
+    let fileBlob = null;
+    let fileBase64 = null;
+
+    if (fileInfo?.rawFileUrl) {
+      console.log("%c 正在下载原文件...", "color: yellow;");
+      fileBlob = await downloadFile(fileInfo.rawFileUrl);
+
+      if (fileBlob) {
+        fileBase64 = await blobToBase64(fileBlob);
+        console.log("%c ✅ 原文件下载成功!", "color: lightgreen; font-weight: bold;");
+        console.log("%c   文件大小:", "color: gray;", `${(fileBlob.size / 1024).toFixed(1)} KB`);
+        console.log("%c   MIME 类型:", "color: gray;", fileBlob.type);
+      }
+    }
+
+    // 构建 payload
+    const payload = {
+      fileId,
+      filename: fileInfo?.filename,
+      taskId: fileInfo?.taskId,
+      batchId: fileInfo?.batchId,
+      annotations,
+      fileBase64
+    };
+
+    console.log("%c 📦 Payload 已构建:", "color: orange;", {
+      ...payload,
+      fileBase64: fileBase64 ? `[${(fileBase64.length / 1024).toFixed(1)} KB]` : null,
+      annotations: annotations ? "[标注数据]" : null
+    });
+    console.groupEnd();
+
+    return payload;
+  }
+
+  // 处理 CLASSIFY_LIST 响应 - 缓存图片信息
+  function handleClassifyList(url, resData) {
+    const match = url.match(/\/api\/classifyTasksList\/([a-f0-9]{32})\/(\d+)/);
+    if (!match) return;
+
+    const taskId = match[1];
+    const baseUrl = getBaseUrl(url);
+    const items = resData?.data?.items || [];
+
+    items.forEach(item => {
+      classifyCache[item.id] = {
+        filename: item.filename,
+        imageUrl: `${baseUrl}/${item.raw_filepath}`,
+        width: item.width,
+        height: item.height,
+        taskId: taskId,
+      };
+    });
+
+    console.log(`🏷️ 已缓存 ${items.length} 张分类图片信息`);
+  }
+
+  // 处理 CLASSIFY_LABEL 请求 - 下载原图片并构建 payload (异步)
+  async function handleClassifyLabel(url, reqBody) {
+    const match = url.match(/\/api\/classifyTaskDataLabel\/([a-f0-9]{32})\/([a-f0-9]{32})/);
+    if (!match) return null;
+
+    const [, taskId, imageId] = match;
+    const body = parseBody(reqBody);
+    const imageInfo = classifyCache[imageId];
+
+    // 标签 ID 数组
+    const labelIds = Array.isArray(body) ? body : [];
+
+    console.group("📋 图像分类配对结果");
+    console.log("%c 图片:", "color: cyan;", imageInfo?.imageUrl || "未找到");
+    console.log("%c 标签数量:", "color: magenta;", labelIds.length);
+
+    // 下载图片
+    let imageBlob = null;
+    let imageBase64 = null;
+
+    if (imageInfo?.imageUrl) {
+      console.log("%c 正在下载图片...", "color: yellow;");
+      imageBlob = await downloadFile(imageInfo.imageUrl);
+
+      if (imageBlob) {
+        imageBase64 = await blobToBase64(imageBlob);
+        console.log("%c ✅ 图片下载成功!", "color: lightgreen; font-weight: bold;");
+        console.log("%c   文件大小:", "color: gray;", `${(imageBlob.size / 1024).toFixed(1)} KB`);
+        console.log("%c   MIME 类型:", "color: gray;", imageBlob.type);
+      }
+    }
+
+    // 构建 payload
+    const payload = {
+      taskId,
+      imageId,
+      filename: imageInfo?.filename,
+      width: imageInfo?.width,
+      height: imageInfo?.height,
+      labelIds,
+      imageBase64
+    };
+
+    console.log("%c 📦 Payload 已构建:", "color: orange;", {
+      ...payload,
+      imageBase64: imageBase64 ? `[${(imageBase64.length / 1024).toFixed(1)} KB]` : null
     });
     console.groupEnd();
 
@@ -225,6 +390,14 @@
         handleDetectionList(url, resData);
       } else if (patternName === "DETECTION_LABEL") {
         handleDetectionLabel(url, reqBody);
+      } else if (patternName === "TEXT_QA_INFO") {
+        handleTextQAInfo(url, resData);
+      } else if (patternName === "TEXT_QA_LABEL") {
+        handleTextQALabel(url, reqBody);
+      } else if (patternName === "CLASSIFY_LIST") {
+        handleClassifyList(url, resData);
+      } else if (patternName === "CLASSIFY_LABEL") {
+        handleClassifyLabel(url, reqBody);
       }
 
       console.groupEnd();
