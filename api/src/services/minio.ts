@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { env } from '../config/env';
 
 const s3Client = new S3Client({
@@ -63,4 +63,17 @@ export async function storeWithMetadata(options: StoreOptions): Promise<{ filePa
   );
 
   return { filePath, metadataPath };
+}
+
+/**
+ * Check MinIO connection and bucket accessibility
+ */
+export async function checkMinioConnection(): Promise<void> {
+  try {
+    await s3Client.send(new HeadBucketCommand({ Bucket: env.minio.bucket }));
+    console.log(`✅ MinIO 连接成功: ${env.minio.endpoint}, bucket: ${env.minio.bucket}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`MinIO 连接失败 (${env.minio.endpoint}): ${message}`);
+  }
 }

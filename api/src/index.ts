@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { detectionRoute } from './routes/detection';
 import { textQaRoute } from './routes/text-qa';
 import { classifyRoute } from './routes/classify';
+import { checkMinioConnection } from './services/minio';
 
 const app = new Hono();
 
@@ -55,7 +56,17 @@ app.notFound((c) => {
   );
 });
 
-console.log(`Starting server on port ${env.port}...`);
+// Startup with dependency checks
+async function startup() {
+  console.log('正在检查依赖服务...');
+  await checkMinioConnection();
+  console.log(`Starting server on port ${env.port}...`);
+}
+
+startup().catch((err) => {
+  console.error('❌ 启动失败:', err.message);
+  process.exit(1);
+});
 
 // Export app for testing
 export { app };
