@@ -84,12 +84,12 @@ async function sendLabelData(workflowType, payload) {
   const endpoint = ENDPOINTS[workflowType];
   if (!endpoint) {
     console.error(`[${workflowType}] Invalid workflow type`);
-    return;
+    return { success: false, error: 'Invalid workflow type' };
   }
 
   if (!payload.fileUrl) {
     console.error(`[${workflowType}] Missing fileUrl`);
-    return;
+    return { success: false, error: 'Missing fileUrl' };
   }
 
   try {
@@ -99,6 +99,9 @@ async function sendLabelData(workflowType, payload) {
     console.log(`[${workflowType}] File downloaded: ${(fileBlob.size / 1024).toFixed(1)} KB`);
 
     const metadata = buildMetadata(workflowType, payload);
+
+    // 📤 发送前记录完整 metadata
+    console.log(`[${workflowType}] 📤 发送的 metadata:`, JSON.stringify(metadata, null, 2));
 
     const formData = new FormData();
     formData.append('metadata', JSON.stringify(metadata));
@@ -112,12 +115,18 @@ async function sendLabelData(workflowType, payload) {
 
     const result = await response.json();
     if (!response.ok) {
-      console.error(`[${workflowType}] ❌ 上传失败 (${response.status}):`, result.error || result);
-    } else {
-      console.log(`[${workflowType}] ✅ 上传成功:`, result);
+      // 详细错误日志
+      console.error(`[${workflowType}] ❌ 上传失败 (${response.status})`);
+      console.error(`[${workflowType}] 📋 发送的 metadata:`, JSON.stringify(metadata, null, 2));
+      console.error(`[${workflowType}] 📋 服务器响应:`, JSON.stringify(result, null, 2));
+      return { success: false, status: response.status, error: result.error || result };
     }
+
+    console.log(`[${workflowType}] ✅ 上传成功:`, result);
+    return { success: true, data: result };
   } catch (err) {
     console.error(`[${workflowType}] Error:`, err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -131,8 +140,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === 'LABEL_DATA') {
     sendLabelData(request.workflowType, request.payload)
-      .then(() => sendResponse({ success: true }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
+      .then(result => sendResponse(result));  // 直接返回完整结果
     return true; // 保持消息通道开放，等待异步响应
   }
 });

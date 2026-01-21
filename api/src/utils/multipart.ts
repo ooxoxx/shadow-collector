@@ -42,6 +42,9 @@ export async function parseMultipartWithMetadata<T>(
     const errors = parseResult.error.errors
       .map((e) => `${e.path.join('.')}: ${e.message}`)
       .join('; ');
+    console.error('❌ [multipart] Metadata 验证失败:');
+    console.error('  收到的数据:', JSON.stringify(metadataJson, null, 2));
+    console.error('  错误详情:', errors);
     throw new Error(`Metadata validation failed: ${errors}`);
   }
 

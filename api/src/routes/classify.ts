@@ -46,6 +46,7 @@ classifyRoute.post('/', async (c) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid request';
+    console.error('❌ [classify] 请求处理失败:', message);
     return c.json({ success: false, error: message }, 400);
   }
 });
