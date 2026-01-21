@@ -13,20 +13,29 @@ console.log(">>> 插件已加载：准备注入拦截脚本...");
 
 // 监听来自 interceptor.js 的消息，中继到 background.js
 window.addEventListener('message', (event) => {
-  if (event.source !== window) return;
+  // 仅检查 data.source 即可，这足以验证消息来源
+  // 注意：不能检查 event.source !== window，因为跨隔离世界通信时
+  // Main World 的 window 和 Content Script World 的 window 是不同的对象
   if (event.data?.source !== 'shadow-collector-interceptor') return;
 
   console.log(">>> [content.js] 收到 interceptor 消息:", event.data.workflowType);
-
-  chrome.runtime.sendMessage({
-    type: 'LABEL_DATA',
-    workflowType: event.data.workflowType,
-    payload: event.data.payload
-  }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error(">>> [content.js] 发送失败:", chrome.runtime.lastError.message);
-    } else {
-      console.log(">>> [content.js] 消息已发送到 background");
-    }
+  console.log("%c >>> [content.js] 转发到 background", "color: orange; font-weight: bold;", {
+    workflowType: event.data.workflowType
   });
+
+  try {
+    chrome.runtime.sendMessage({
+      type: 'LABEL_DATA',
+      workflowType: event.data.workflowType,
+      payload: event.data.payload
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error(">>> [content.js] 发送失败:", chrome.runtime.lastError.message);
+      } else {
+        console.log(">>> [content.js] 消息已发送到 background, response:", response);
+      }
+    });
+  } catch (err) {
+    console.error(">>> [content.js] sendMessage 抛出异常:", err);
+  }
 });

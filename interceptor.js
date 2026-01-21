@@ -57,7 +57,10 @@
 
   // 发送消息到 background.js (通过 content.js 中继)
   function sendToBackground(workflowType, payload) {
-    console.log("%c >>> [interceptor] 发送消息到 content.js:", "color: lime; font-weight: bold;", workflowType);
+    console.log("%c >>> [interceptor] sendToBackground", "color: lime; font-weight: bold;", {
+      workflowType,
+      fileUrl: payload?.fileUrl ? "[有]" : "[无]"
+    });
     window.postMessage({
       source: 'shadow-collector-interceptor',
       workflowType,
@@ -84,7 +87,11 @@
   // 从 URL 提取 baseUrl
   function getBaseUrl(url) {
     const match = url.match(/^(https?:\/\/[^\/]+)/);
-    return match ? match[1] : "";
+    if (match) {
+      return match[1];
+    }
+    // 相对路径时，使用当前页面的 origin
+    return window.location.origin;
   }
 
   // 处理 DETECTION_LIST 响应
@@ -96,8 +103,8 @@
       imageCache[item.id] = {
         filename: item.filename,
         imageUrl: `${baseUrl}/${item.storage_path}`,
-        width: item.width,
-        height: item.height
+        width: Number(item.width),
+        height: Number(item.height)
       };
     });
 
@@ -136,6 +143,10 @@
 
     // 查找配对的图片信息
     const imageInfo = imageCache[imageId];
+    if (!imageInfo) {
+      console.error(`❌ 图片信息未找到: ${imageId}, 缓存中有: ${Object.keys(imageCache).length} 条`);
+      return null;
+    }
 
     console.group(`📋 配对结果 [${annotationType}]`);
     console.log("%c 标注类型:", "color: gold; font-weight: bold;", annotationType);
@@ -159,7 +170,7 @@
       qaAnnotation,           // 始终包含，后端判断类型
       fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
       uploadTime: new Date().toISOString(),
-      uploadIP: clientIP
+      uploadIP: await getLocalIP()
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -225,7 +236,7 @@
       annotations,
       fileUrl: fileInfo?.rawFileUrl,  // 传 URL，background.js 负责下载
       uploadTime: new Date().toISOString(),
-      uploadIP: clientIP
+      uploadIP: await getLocalIP()
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -254,8 +265,8 @@
       classifyCache[item.id] = {
         filename: item.filename,
         imageUrl: `${baseUrl}/${item.raw_filepath}`,
-        width: item.width,
-        height: item.height,
+        width: Number(item.width),
+        height: Number(item.height),
         taskId: taskId,
       };
     });
@@ -289,7 +300,7 @@
       labelIds,
       fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
       uploadTime: new Date().toISOString(),
-      uploadIP: clientIP
+      uploadIP: await getLocalIP()
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -377,6 +388,7 @@
   // 通用日志打印函数
   // ==========================================
   function logTraffic(type, url, reqBody, resData) {
+    console.log(`%c >>> [logTraffic] ${type} ${url}`, "color: yellow; font-weight: bold;");
     // 过滤静态资源请求
     if (url.match(/\.(css|js|png|jpg|svg)/)) return;
 

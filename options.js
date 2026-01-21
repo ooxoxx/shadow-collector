@@ -1,5 +1,5 @@
 // options.js
-const DEFAULT_URL = "http://127.0.0.1:8000";
+const DEFAULT_URL = "http://127.0.0.1:8001";
 const STORAGE_KEY = "serverUrl";
 
 const serverUrlInput = document.getElementById("serverUrl");

@@ -111,7 +111,11 @@ async function sendLabelData(workflowType, payload) {
     });
 
     const result = await response.json();
-    console.log(`[${workflowType}] Upload:`, result.success ? '✅' : '❌', result);
+    if (!response.ok) {
+      console.error(`[${workflowType}] ❌ 上传失败 (${response.status}):`, result.error || result);
+    } else {
+      console.log(`[${workflowType}] ✅ 上传成功:`, result);
+    }
   } catch (err) {
     console.error(`[${workflowType}] Error:`, err);
   }
@@ -119,7 +123,11 @@ async function sendLabelData(workflowType, payload) {
 
 // 消息监听
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log("后台收到消息:", request.type, request.workflowType);
+  console.log("%c >>> [background] 收到消息", "color: gold; font-weight: bold;", {
+    type: request.type,
+    workflowType: request.workflowType
+  });
+  console.log(">>> [background] 当前服务器地址:", cachedServerUrl);
 
   if (request.type === 'LABEL_DATA') {
     sendLabelData(request.workflowType, request.payload)

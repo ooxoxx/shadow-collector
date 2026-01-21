@@ -15,7 +15,7 @@ To develop:
 2. Click "Load unpacked" and select this directory
 3. After code changes, click the reload button on the extension card
 
-Backend server must run at `http://127.0.0.1:8000` with endpoints:
+Backend server must run at `http://127.0.0.1:8001` with endpoints:
 - `POST /api/v1/task` - Receives task metadata
 - `POST /api/v1/label` - Receives label submissions
 
