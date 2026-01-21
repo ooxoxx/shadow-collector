@@ -8,6 +8,7 @@ const hexIdSchema = z.string().regex(
 
 /**
  * Detection (目标检测) metadata schema (for multipart/form-data)
+ * Supports both detection and multimodal annotation types
  */
 export const detectionMetadataSchema = z.object({
   taskId: hexIdSchema,
@@ -16,6 +17,12 @@ export const detectionMetadataSchema = z.object({
   width: z.number().positive(),
   height: z.number().positive(),
   annotations: z.array(z.unknown()), // Flexible annotation structure
+  // Multimodal fields - backend determines type based on content
+  descriptionAnnotation: z.array(z.unknown()).default([]),
+  qaAnnotation: z.array(z.unknown()).default([]),
+  // Upload metadata
+  uploadTime: z.string().optional(),
+  uploadIP: z.string().nullable().optional()
 });
 
 export type DetectionMetadata = z.infer<typeof detectionMetadataSchema>;
@@ -29,6 +36,9 @@ export const textQaMetadataSchema = z.object({
   taskId: z.union([z.string(), z.number()]), // Can be string or number
   batchId: z.string().min(1),
   annotations: z.unknown(), // Flexible annotation structure
+  // Upload metadata
+  uploadTime: z.string().optional(),
+  uploadIP: z.string().nullable().optional()
 });
 
 export type TextQaMetadata = z.infer<typeof textQaMetadataSchema>;
@@ -43,6 +53,9 @@ export const classifyMetadataSchema = z.object({
   width: z.number().positive(),
   height: z.number().positive(),
   labelIds: z.array(z.number()),
+  // Upload metadata
+  uploadTime: z.string().optional(),
+  uploadIP: z.string().nullable().optional()
 });
 
 export type ClassifyMetadata = z.infer<typeof classifyMetadataSchema>;
