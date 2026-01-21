@@ -28,41 +28,6 @@
   // 图像分类元数据缓存 { imageId: { filename, imageUrl, width, height, taskId } }
   const classifyCache = {};
 
-  // 客户端本地IP缓存
-  let clientIP = null;
-
-  // 通过 WebRTC 获取本地IP
-  async function getLocalIP() {
-    if (clientIP) return clientIP;
-
-    return new Promise((resolve) => {
-      const pc = new RTCPeerConnection({ iceServers: [] });
-      pc.createDataChannel('');
-      pc.createOffer().then(offer => pc.setLocalDescription(offer));
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          const ipMatch = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
-          if (ipMatch) {
-            clientIP = ipMatch[0];
-            console.log(`🌐 已获取本地IP: ${clientIP}`);
-            resolve(clientIP);
-            pc.close();
-          }
-        }
-      };
-
-      // 超时fallback
-      setTimeout(() => {
-        pc.close();
-        resolve(null);
-      }, 1000);
-    });
-  }
-
-  // 初始化时获取IP
-  getLocalIP();
-
   function matchPattern(url) {
     for (const [name, pattern] of Object.entries(API_PATTERNS)) {
       if (pattern.test(url)) return name;
@@ -124,7 +89,7 @@
     });
   }
 
-  // 处理 DETECTION_LABEL 请求 (异步)
+  // 处理 DETECTION_LABEL 请求 (异步) - 支持目标检测和多模态标注
   async function handleDetectionLabel(url, reqBody) {
     // 从 URL 提取 taskId 和 imageId
     const match = url.match(/\/api\/updateLabelInfo\/([a-f0-9]{32})\/([a-f0-9]{32})\/label/);
@@ -142,12 +107,30 @@
       console.warn("标注数据解析失败");
     }
 
+    // 解析 descriptionAnnotation 和 qaAnnotation (用于区分多模态)
+    let descriptionAnnotation = [];
+    let qaAnnotation = [];
+    try {
+      descriptionAnnotation = JSON.parse(body?.descriptionAnnotation || "[]");
+      qaAnnotation = JSON.parse(body?.qaAnnotation || "[]");
+    } catch { }
+
+    // 判断标注类型
+    const isMultimodal = descriptionAnnotation.length > 0 || qaAnnotation.length > 0;
+    const annotationType = isMultimodal ? "MULTIMODAL" : "DETECTION";
+
     // 查找配对的图片信息
     const imageInfo = imageCache[imageId];
 
-    console.group("📋 配对结果");
+    console.group(`📋 配对结果 [${annotationType}]`);
+    console.log("%c 标注类型:", "color: gold; font-weight: bold;", annotationType);
     console.log("%c 图片:", "color: cyan;", imageInfo?.imageUrl || "未找到");
-    console.log("%c 标注数量:", "color: magenta;", annotations.length);
+    console.log("%c 框标注数量:", "color: magenta;", annotations.length);
+
+    if (isMultimodal) {
+      console.log("%c 描述标注数量:", "color: lightblue;", descriptionAnnotation.length);
+      console.log("%c QA标注数量:", "color: lightgreen;", qaAnnotation.length);
+    }
 
     // === 下载图片 ===
     let imageBlob = null;
@@ -167,14 +150,20 @@
       }
     }
 
-    // === 构建完整 payload (暂不发送) ===
+    // === 构建完整 payload ===
     const payload = {
       taskId,
       imageId,
+      annotationType,  // "DETECTION" 或 "MULTIMODAL"
       filename: imageInfo?.filename,
       width: imageInfo?.width,
       height: imageInfo?.height,
       annotations,
+      // 仅在多模态时包含这些字段
+      ...(isMultimodal && {
+        descriptionAnnotation,
+        qaAnnotation,
+      }),
       imageBase64,  // 完整 base64 数据
       uploadTime: new Date().toISOString(),
       uploadIP: clientIP
@@ -182,7 +171,11 @@
 
     console.log("%c 📦 Payload 已构建 (未发送):", "color: orange;", {
       ...payload,
-      imageBase64: payload.imageBase64 ? `[${(imageBase64.length / 1024).toFixed(1)} KB base64]` : null
+      imageBase64: payload.imageBase64 ? `[${(imageBase64.length / 1024).toFixed(1)} KB base64]` : null,
+      ...(isMultimodal && {
+        descriptionAnnotation: `[${descriptionAnnotation.length} 条描述]`,
+        qaAnnotation: `[${qaAnnotation.length} 条QA]`
+      })
     });
     console.groupEnd();
 
@@ -252,9 +245,7 @@
       taskId: fileInfo?.taskId,
       batchId: fileInfo?.batchId,
       annotations,
-      fileBase64,
-      uploadTime: new Date().toISOString(),
-      uploadIP: clientIP
+      fileBase64
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -329,9 +320,7 @@
       width: imageInfo?.width,
       height: imageInfo?.height,
       labelIds,
-      imageBase64,
-      uploadTime: new Date().toISOString(),
-      uploadIP: clientIP
+      imageBase64
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {

@@ -5,6 +5,14 @@
   "description": "拦截标注任务数据和图片",
   "permissions": ["storage", "webRequest"],
   "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "options.html",
+    "default_title": "ShadowCollector Settings"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
   "background": {
     "service_worker": "background.js"
   },

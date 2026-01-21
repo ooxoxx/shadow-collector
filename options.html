@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShadowCollector 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>ShadowCollector 设置</h1>
+
+    <div class="form-group">
+      <label for="serverUrl">后端服务器地址</label>
+      <input type="text" id="serverUrl" placeholder="http://127.0.0.1:8000">
+    </div>
+
+    <div class="button-group">
+      <button id="saveBtn" class="primary">保存</button>
+      <button id="testBtn" class="secondary">测试连接</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
