@@ -1,5 +1,5 @@
 // background.js
-const DEFAULT_SERVER_URL = "http://127.0.0.1:8000";
+const DEFAULT_SERVER_URL = "http://127.0.0.1:8001";
 const STORAGE_KEY = "serverUrl";
 
 // Cached server URL for better performance
@@ -118,10 +118,13 @@ async function sendLabelData(workflowType, payload) {
 }
 
 // 消息监听
-chrome.runtime.onMessage.addListener((request) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("后台收到消息:", request.type, request.workflowType);
 
   if (request.type === 'LABEL_DATA') {
-    sendLabelData(request.workflowType, request.payload);
+    sendLabelData(request.workflowType, request.payload)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true; // 保持消息通道开放，等待异步响应
   }
 });

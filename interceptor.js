@@ -57,6 +57,7 @@
 
   // 发送消息到 background.js (通过 content.js 中继)
   function sendToBackground(workflowType, payload) {
+    console.log("%c >>> [interceptor] 发送消息到 content.js:", "color: lime; font-weight: bold;", workflowType);
     window.postMessage({
       source: 'shadow-collector-interceptor',
       workflowType,

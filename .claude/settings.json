@@ -1,9 +1,18 @@
 {
     "permissions":{
-        "allow": {
-            "Bash(bun install*)",
-            "Bash(bun run tsc*)",
-            "Bash(bunx tsc*)"
-        }
+        "allow": [
+            "Bash(file:*)",
+            "Bash(git add:*)",
+            "Bash(git commit:*)",
+            "Bash(bun install:*)",
+            "Bash(bun run tsc:*)",
+            "Bash(bun run dev:*)",
+            "Bash(bunx tsc:*)",
+            "Bash(bun run build)",
+            "Bash(grep:*)",
+            "Skill(superpowers:*)",
+            "Bash(docker build:*)",
+            "Bash(git merge:*)"
+        ]
     }
 }
