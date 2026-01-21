@@ -21,27 +21,107 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log("后台收到数据:", request);
+// 端点映射
+const ENDPOINTS = {
+  DETECTION: '/api/v1/label/detection',
+  TEXT_QA: '/api/v1/label/text-qa',
+  CLASSIFY: '/api/v1/label/classify'
+};
 
-  if (request.type === "TASK_DATA") {
-    // 1. 转发任务元数据给 Python 后端
-    fetch(`${cachedServerUrl}/api/v1/task`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request.payload),
-    }).catch((err) => console.error("上报失败", err));
+// 下载文件为 Blob
+async function downloadFile(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+  return response.blob();
+}
 
-    // 2. (可选) 如果 payload 里有图片链接，可以在这里发起下载
-    // const imageUrl = request.payload.data.imageUrl;
-    // downloadImage(imageUrl);
+// 构建 metadata
+function buildMetadata(workflowType, payload) {
+  const common = {
+    uploadTime: payload.uploadTime,
+    uploadIP: payload.uploadIP
+  };
+
+  switch (workflowType) {
+    case 'DETECTION':
+      return {
+        ...common,
+        taskId: payload.taskId,
+        imageId: payload.imageId,
+        filename: payload.filename,
+        width: payload.width,
+        height: payload.height,
+        annotations: payload.annotations || [],
+        descriptionAnnotation: payload.descriptionAnnotation || [],
+        qaAnnotation: payload.qaAnnotation || []
+      };
+    case 'TEXT_QA':
+      return {
+        ...common,
+        fileId: payload.fileId,
+        filename: payload.filename,
+        taskId: payload.taskId,
+        batchId: payload.batchId,
+        annotations: payload.annotations
+      };
+    case 'CLASSIFY':
+      return {
+        ...common,
+        taskId: payload.taskId,
+        imageId: payload.imageId,
+        filename: payload.filename,
+        width: payload.width,
+        height: payload.height,
+        labelIds: payload.labelIds || []
+      };
+    default:
+      return common;
+  }
+}
+
+// 发送 multipart/form-data
+async function sendLabelData(workflowType, payload) {
+  const endpoint = ENDPOINTS[workflowType];
+  if (!endpoint) {
+    console.error(`[${workflowType}] Invalid workflow type`);
+    return;
   }
 
-  if (request.type === "SUBMIT_DATA") {
-    fetch(`${cachedServerUrl}/api/v1/label`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request.payload),
-    }).catch((err) => console.error("上报失败", err));
+  if (!payload.fileUrl) {
+    console.error(`[${workflowType}] Missing fileUrl`);
+    return;
+  }
+
+  try {
+    console.log(`[${workflowType}] Downloading file...`);
+    // 直接下载文件为 Blob
+    const fileBlob = await downloadFile(payload.fileUrl);
+    console.log(`[${workflowType}] File downloaded: ${(fileBlob.size / 1024).toFixed(1)} KB`);
+
+    const metadata = buildMetadata(workflowType, payload);
+
+    const formData = new FormData();
+    formData.append('metadata', JSON.stringify(metadata));
+    formData.append('file', fileBlob, payload.filename || 'file');
+
+    console.log(`[${workflowType}] Uploading to ${cachedServerUrl}${endpoint}...`);
+    const response = await fetch(`${cachedServerUrl}${endpoint}`, {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await response.json();
+    console.log(`[${workflowType}] Upload:`, result.success ? '✅' : '❌', result);
+  } catch (err) {
+    console.error(`[${workflowType}] Error:`, err);
+  }
+}
+
+// 消息监听
+chrome.runtime.onMessage.addListener((request) => {
+  console.log("后台收到消息:", request.type, request.workflowType);
+
+  if (request.type === 'LABEL_DATA') {
+    sendLabelData(request.workflowType, request.payload);
   }
 });

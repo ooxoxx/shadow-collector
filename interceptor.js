@@ -28,6 +28,42 @@
   // 图像分类元数据缓存 { imageId: { filename, imageUrl, width, height, taskId } }
   const classifyCache = {};
 
+  // 客户端本地IP缓存
+  let clientIP = null;
+
+  // 通过 WebRTC 获取本地IP
+  async function getLocalIP() {
+    if (clientIP) return clientIP;
+    return new Promise((resolve) => {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const ipMatch = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+          if (ipMatch) {
+            clientIP = ipMatch[0];
+            resolve(clientIP);
+            pc.close();
+          }
+        }
+      };
+      setTimeout(() => { pc.close(); resolve(null); }, 1000);
+    });
+  }
+
+  // 初始化时获取IP
+  getLocalIP();
+
+  // 发送消息到 background.js (通过 content.js 中继)
+  function sendToBackground(workflowType, payload) {
+    window.postMessage({
+      source: 'shadow-collector-interceptor',
+      workflowType,
+      payload
+    }, '*');
+  }
+
   function matchPattern(url) {
     for (const [name, pattern] of Object.entries(API_PATTERNS)) {
       if (pattern.test(url)) return name;
@@ -67,28 +103,6 @@
     console.log(`📦 已缓存 ${items.length} 张图片信息`);
   }
 
-  // 下载文件并返回 Blob
-  async function downloadFile(fileUrl) {
-    try {
-      const response = await fetch(fileUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      return blob;
-    } catch (err) {
-      console.error("文件下载失败:", err);
-      return null;
-    }
-  }
-
-  // Blob 转 base64 (用于证明下载成功)
-  function blobToBase64(blob) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-  }
-
   // 处理 DETECTION_LABEL 请求 (异步) - 支持目标检测和多模态标注
   async function handleDetectionLabel(url, reqBody) {
     // 从 URL 提取 taskId 和 imageId
@@ -107,7 +121,7 @@
       console.warn("标注数据解析失败");
     }
 
-    // 解析 descriptionAnnotation 和 qaAnnotation (用于区分多模态)
+    // 解析 descriptionAnnotation 和 qaAnnotation (后端判断类型)
     let descriptionAnnotation = [];
     let qaAnnotation = [];
     try {
@@ -115,7 +129,7 @@
       qaAnnotation = JSON.parse(body?.qaAnnotation || "[]");
     } catch { }
 
-    // 判断标注类型
+    // 判断标注类型（仅用于日志显示）
     const isMultimodal = descriptionAnnotation.length > 0 || qaAnnotation.length > 0;
     const annotationType = isMultimodal ? "MULTIMODAL" : "DETECTION";
 
@@ -132,52 +146,31 @@
       console.log("%c QA标注数量:", "color: lightgreen;", qaAnnotation.length);
     }
 
-    // === 下载图片 ===
-    let imageBlob = null;
-    let imageBase64 = null;
-
-    if (imageInfo?.imageUrl) {
-      console.log("%c 正在下载图片...", "color: yellow;");
-      imageBlob = await downloadFile(imageInfo.imageUrl);
-
-      if (imageBlob) {
-        imageBase64 = await blobToBase64(imageBlob);
-        console.log("%c ✅ 图片下载成功!", "color: lightgreen; font-weight: bold;");
-        console.log("%c   文件大小:", "color: gray;", `${(imageBlob.size / 1024).toFixed(1)} KB`);
-        console.log("%c   MIME 类型:", "color: gray;", imageBlob.type);
-        // 显示缩略预览 (base64 前100字符)
-        console.log("%c   Base64预览:", "color: gray;", imageBase64.substring(0, 100) + "...");
-      }
-    }
-
-    // === 构建完整 payload ===
+    // === 构建 payload (传 URL，不传 base64) ===
     const payload = {
       taskId,
       imageId,
-      annotationType,  // "DETECTION" 或 "MULTIMODAL"
       filename: imageInfo?.filename,
       width: imageInfo?.width,
       height: imageInfo?.height,
       annotations,
-      // 仅在多模态时包含这些字段
-      ...(isMultimodal && {
-        descriptionAnnotation,
-        qaAnnotation,
-      }),
-      imageBase64,  // 完整 base64 数据
+      descriptionAnnotation,  // 始终包含，后端判断类型
+      qaAnnotation,           // 始终包含，后端判断类型
+      fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
       uploadTime: new Date().toISOString(),
       uploadIP: clientIP
     };
 
-    console.log("%c 📦 Payload 已构建 (未发送):", "color: orange;", {
+    console.log("%c 📦 Payload 已构建:", "color: orange;", {
       ...payload,
-      imageBase64: payload.imageBase64 ? `[${(imageBase64.length / 1024).toFixed(1)} KB base64]` : null,
-      ...(isMultimodal && {
-        descriptionAnnotation: `[${descriptionAnnotation.length} 条描述]`,
-        qaAnnotation: `[${qaAnnotation.length} 条QA]`
-      })
+      fileUrl: payload.fileUrl ? "[URL]" : null,
+      descriptionAnnotation: `[${descriptionAnnotation.length} 条描述]`,
+      qaAnnotation: `[${qaAnnotation.length} 条QA]`
     });
     console.groupEnd();
+
+    // 发送到 background.js
+    sendToBackground('DETECTION', payload);
 
     return payload;
   }
@@ -202,7 +195,7 @@
     }
   }
 
-  // 处理 TEXT_QA_LABEL 请求 - 下载原文件并构建 payload (异步)
+  // 处理 TEXT_QA_LABEL 请求 - 构建 payload 并发送 (异步)
   async function handleTextQALabel(url, reqBody) {
     const match = url.match(/\/api\/pass_json\/([a-f0-9]{32})/);
     if (!match) return null;
@@ -222,38 +215,27 @@
     console.group("📋 文本质检配对结果");
     console.log("%c 原文件:", "color: cyan;", fileInfo?.rawFileUrl || "未找到");
 
-    // 下载原文件
-    let fileBlob = null;
-    let fileBase64 = null;
-
-    if (fileInfo?.rawFileUrl) {
-      console.log("%c 正在下载原文件...", "color: yellow;");
-      fileBlob = await downloadFile(fileInfo.rawFileUrl);
-
-      if (fileBlob) {
-        fileBase64 = await blobToBase64(fileBlob);
-        console.log("%c ✅ 原文件下载成功!", "color: lightgreen; font-weight: bold;");
-        console.log("%c   文件大小:", "color: gray;", `${(fileBlob.size / 1024).toFixed(1)} KB`);
-        console.log("%c   MIME 类型:", "color: gray;", fileBlob.type);
-      }
-    }
-
-    // 构建 payload
+    // 构建 payload (传 URL，不传 base64)
     const payload = {
       fileId,
       filename: fileInfo?.filename,
       taskId: fileInfo?.taskId,
       batchId: fileInfo?.batchId,
       annotations,
-      fileBase64
+      fileUrl: fileInfo?.rawFileUrl,  // 传 URL，background.js 负责下载
+      uploadTime: new Date().toISOString(),
+      uploadIP: clientIP
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
       ...payload,
-      fileBase64: fileBase64 ? `[${(fileBase64.length / 1024).toFixed(1)} KB]` : null,
+      fileUrl: payload.fileUrl ? "[URL]" : null,
       annotations: annotations ? "[标注数据]" : null
     });
     console.groupEnd();
+
+    // 发送到 background.js
+    sendToBackground('TEXT_QA', payload);
 
     return payload;
   }
@@ -280,7 +262,7 @@
     console.log(`🏷️ 已缓存 ${items.length} 张分类图片信息`);
   }
 
-  // 处理 CLASSIFY_LABEL 请求 - 下载原图片并构建 payload (异步)
+  // 处理 CLASSIFY_LABEL 请求 - 构建 payload 并发送 (异步)
   async function handleClassifyLabel(url, reqBody) {
     const match = url.match(/\/api\/classifyTaskDataLabel\/([a-f0-9]{32})\/([a-f0-9]{32})/);
     if (!match) return null;
@@ -296,23 +278,7 @@
     console.log("%c 图片:", "color: cyan;", imageInfo?.imageUrl || "未找到");
     console.log("%c 标签数量:", "color: magenta;", labelIds.length);
 
-    // 下载图片
-    let imageBlob = null;
-    let imageBase64 = null;
-
-    if (imageInfo?.imageUrl) {
-      console.log("%c 正在下载图片...", "color: yellow;");
-      imageBlob = await downloadFile(imageInfo.imageUrl);
-
-      if (imageBlob) {
-        imageBase64 = await blobToBase64(imageBlob);
-        console.log("%c ✅ 图片下载成功!", "color: lightgreen; font-weight: bold;");
-        console.log("%c   文件大小:", "color: gray;", `${(imageBlob.size / 1024).toFixed(1)} KB`);
-        console.log("%c   MIME 类型:", "color: gray;", imageBlob.type);
-      }
-    }
-
-    // 构建 payload
+    // 构建 payload (传 URL，不传 base64)
     const payload = {
       taskId,
       imageId,
@@ -320,14 +286,19 @@
       width: imageInfo?.width,
       height: imageInfo?.height,
       labelIds,
-      imageBase64
+      fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
+      uploadTime: new Date().toISOString(),
+      uploadIP: clientIP
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
       ...payload,
-      imageBase64: imageBase64 ? `[${(imageBase64.length / 1024).toFixed(1)} KB]` : null
+      fileUrl: payload.fileUrl ? "[URL]" : null
     });
     console.groupEnd();
+
+    // 发送到 background.js
+    sendToBackground('CLASSIFY', payload);
 
     return payload;
   }
@@ -431,8 +402,6 @@
       }
 
       console.groupEnd();
-
-      // TODO: 后续添加消息发送逻辑
     } else {
       // 其他请求，仅调试输出（可选关闭）
       // console.log(`[ShadowCollector] ${type}: ${url}`);
