@@ -32,14 +32,15 @@ function getDatePath(): string {
 
 /**
  * Store a file and its metadata to MinIO
- * Structure: {bucket}/{type}/{date}/{taskId}/{filename}
+ * Structure: {bucket}/{type}/{date}/{filename}
  */
 export async function storeWithMetadata(options: StoreOptions): Promise<{ filePath: string; metadataPath: string }> {
-  const { type, taskId, filename, fileBuffer, fileMimeType, metadata } = options;
+  const { type, filename, fileBuffer, fileMimeType, metadata } = options;
   const datePath = getDatePath();
-  const basePath = `${type}/${datePath}/${taskId}`;
+  const basePath = `${type}/${datePath}`;
   const filePath = `${basePath}/${filename}`;
-  const metadataPath = `${basePath}/${filename}.json`;
+  const stem = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
+  const metadataPath = `${basePath}/${stem}.json`;
 
   // Upload the file
   await s3Client.send(
