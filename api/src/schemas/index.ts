@@ -65,3 +65,27 @@ export const classifyMetadataSchema = z.object({
 });
 
 export type ClassifyMetadata = z.infer<typeof classifyMetadataSchema>;
+
+/**
+ * QA Pair (问答对标注) metadata schema
+ */
+export const qaPairMetadataSchema = z.object({
+  taskId: z.string().min(1),
+  dataTxtId: z.string().optional(),
+  filename: z.string().min(1),
+  department: z.string().optional(),
+  annotation: z.object({
+    dataId: z.number(),
+    isAvailable: z.string().optional(),
+    questionType: z.string().optional(),
+    applicableRole: z.string().optional(),
+    applicableScene: z.string().optional(),
+    editedInput: z.string().optional(),
+    editedAnswer: z.string().optional()
+  }),
+  uploadTime: z.string().optional(),
+  uploadIP: z.string().nullable().optional(),
+  storagePath: z.string().optional()
+});
+
+export type QaPairMetadata = z.infer<typeof qaPairMetadataSchema>;

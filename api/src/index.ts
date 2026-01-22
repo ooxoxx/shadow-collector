@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { detectionRoute } from './routes/detection';
 import { textQaRoute } from './routes/text-qa';
 import { classifyRoute } from './routes/classify';
+import { qaPairRoute } from './routes/qa-pair';
 import { checkMinioConnection } from './services/minio';
 
 const app = new Hono();
@@ -32,6 +33,7 @@ app.get('/health', (c) => {
 app.route('/api/v1/label/detection', detectionRoute);
 app.route('/api/v1/label/text-qa', textQaRoute);
 app.route('/api/v1/label/classify', classifyRoute);
+app.route('/api/v1/label/qa-pair', qaPairRoute);
 
 // Global error handler
 app.onError((err, c) => {

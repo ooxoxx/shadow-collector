@@ -25,7 +25,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 const ENDPOINTS = {
   DETECTION: '/api/v1/label/detection',
   TEXT_QA: '/api/v1/label/text-qa',
-  CLASSIFY: '/api/v1/label/classify'
+  CLASSIFY: '/api/v1/label/classify',
+  QA_PAIR: '/api/v1/label/qa-pair'
 };
 
 // 下载文件为 Blob
@@ -74,6 +75,15 @@ function buildMetadata(workflowType, payload) {
         width: payload.width,
         height: payload.height,
         labelIds: payload.labelIds || []
+      };
+    case 'QA_PAIR':
+      return {
+        ...common,
+        taskId: payload.taskId,
+        dataTxtId: payload.dataTxtId,
+        filename: payload.filename,
+        department: payload.department,
+        annotation: payload.annotation
       };
     default:
       return common;

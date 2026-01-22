@@ -12,11 +12,15 @@
 
     // 文本质检
     TEXT_QA_INFO: /\/api\/get_json\/[a-f0-9]{32}$/,
-    TEXT_QA_LABEL: /\/api\/pass_json\/[a-f0-9]{32}$/,
+    TEXT_QA_LABEL: /\/api\/save_json\/[a-f0-9]{32}$/,
 
     // 图像分类
     CLASSIFY_LIST: /\/api\/classifyTasksList\/[a-f0-9]{32}\/\d+/,
     CLASSIFY_LABEL: /\/api\/classifyTaskDataLabel\/[a-f0-9]{32}\/[a-f0-9]{32}$/,
+
+    // 问答对标注
+    QA_PAIR_INFO: /\/api\/txt_label_task\/review\/get_data_by_file/,
+    QA_PAIR_LABEL: /\/api\/txt_label_task\/review\/update_qa_data$/,
   };
 
   // 图片元数据缓存 { imageId: { filename, imageUrl, width, height } }
@@ -27,6 +31,12 @@
 
   // 图像分类元数据缓存 { imageId: { filename, imageUrl, width, height, taskId } }
   const classifyCache = {};
+
+  // 问答对标注元数据缓存 { taskId: { filename, fileUrl, department, storagePath } }
+  const qaPairCache = {};
+
+  // 当前问答对文件 (用于 update_qa_data 匹配)
+  let currentQAPairFile = null;
 
   // 客户端本地IP缓存
   let clientIP = null;
@@ -219,7 +229,7 @@
 
   // 处理 TEXT_QA_LABEL 请求 - 构建 payload 并发送 (异步)
   async function handleTextQALabel(url, reqBody) {
-    const match = url.match(/\/api\/pass_json\/([a-f0-9]{32})/);
+    const match = url.match(/\/api\/save_json\/([a-f0-9]{32})/);
     if (!match) return null;
 
     const fileId = match[1];
@@ -328,6 +338,73 @@
     return payload;
   }
 
+  // 处理 QA_PAIR_INFO 响应 - 缓存文件信息
+  function handleQAPairInfo(url, resData) {
+    // 从 URL 提取 taskId 和 dataTxtId
+    const urlObj = new URL(url, window.location.origin);
+    const taskId = urlObj.searchParams.get('taskId');
+    const dataTxtId = urlObj.searchParams.get('dataTxtId');
+
+    if (!taskId) return;
+
+    const baseUrl = getBaseUrl(url);
+    const data = resData?.data;
+
+    if (data?.origin_file_path) {
+      const fileInfo = {
+        taskId,
+        dataTxtId,
+        filename: data.origin_file_path.split('/').pop()?.split('?')[0] || 'unknown',
+        fileUrl: `${baseUrl}/${data.origin_file_path}`,
+        department: data.file_department,
+        storagePath: extractStoragePath(data.origin_file_path),
+        qaDataList: data.qa_data_list || []
+      };
+
+      qaPairCache[taskId] = fileInfo;
+      currentQAPairFile = fileInfo;  // 记录当前文件
+
+      console.log(`📝 已缓存问答对文件: ${fileInfo.filename}`);
+    }
+  }
+
+  // 处理 QA_PAIR_LABEL 请求 - 构建 payload 并发送 (异步)
+  async function handleQAPairLabel(url, reqBody) {
+    const body = parseBody(reqBody);
+    const fileInfo = currentQAPairFile;  // 使用当前文件信息
+
+    if (!fileInfo) {
+      console.error('❌ 未找到对应的问答对文件信息');
+      return null;
+    }
+
+    console.group('📋 问答对标注配对结果');
+    console.log('%c 原文件:', 'color: cyan;', fileInfo?.fileUrl || '未找到');
+    console.log('%c 标注数据:', 'color: magenta;', body);
+
+    // 构建 payload
+    const payload = {
+      taskId: fileInfo.taskId,
+      dataTxtId: fileInfo.dataTxtId,
+      filename: fileInfo.filename,
+      department: fileInfo.department,
+      annotation: body,  // 包含 dataId, questionType, editedInput, editedAnswer 等
+      fileUrl: fileInfo.fileUrl,
+      storagePath: fileInfo.storagePath,
+      uploadTime: new Date().toISOString(),
+      uploadIP: await getLocalIP()
+    };
+
+    console.log('%c 📦 Payload 已构建:', 'color: orange;', {
+      ...payload,
+      fileUrl: payload.fileUrl ? '[URL]' : null
+    });
+    console.groupEnd();
+
+    sendToBackground('QA_PAIR', payload);
+    return payload;
+  }
+
   // ==========================================
   // Part 1: 拦截 Fetch (保留之前的逻辑)
   // ==========================================
@@ -425,6 +502,10 @@
         handleClassifyList(url, resData);
       } else if (patternName === "CLASSIFY_LABEL") {
         handleClassifyLabel(url, reqBody);
+      } else if (patternName === "QA_PAIR_INFO") {
+        handleQAPairInfo(url, resData);
+      } else if (patternName === "QA_PAIR_LABEL") {
+        handleQAPairLabel(url, reqBody);
       }
 
       console.groupEnd();
