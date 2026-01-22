@@ -94,6 +94,13 @@
     return window.location.origin;
   }
 
+  // 从带 auth 参数的路径中提取纯路径
+  function extractStoragePath(rawPath) {
+    if (!rawPath) return null;
+    const authIndex = rawPath.indexOf('?auth=');
+    return authIndex > 0 ? rawPath.substring(0, authIndex) : rawPath;
+  }
+
   // 处理 DETECTION_LIST 响应
   function handleDetectionList(url, resData) {
     const baseUrl = getBaseUrl(url);
@@ -104,7 +111,8 @@
         filename: item.filename,
         imageUrl: `${baseUrl}/${item.storage_path}`,
         width: Number(item.width),
-        height: Number(item.height)
+        height: Number(item.height),
+        storagePath: extractStoragePath(item.storage_path)
       };
     });
 
@@ -169,6 +177,7 @@
       descriptionAnnotation,  // 始终包含，后端判断类型
       qaAnnotation,           // 始终包含，后端判断类型
       fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
+      storagePath: imageInfo?.storagePath,
       uploadTime: new Date().toISOString(),
       uploadIP: await getLocalIP()
     };
@@ -202,6 +211,7 @@
         rawFileUrl: `${baseUrl}/${data.raw_filepath}`,
         taskId: data.task_id,
         batchId: data.batch_id,
+        storagePath: extractStoragePath(data.raw_filepath)
       };
       console.log(`📄 已缓存文本质检文件: ${data.filename}`);
     }
@@ -235,6 +245,7 @@
       batchId: fileInfo?.batchId,
       annotations,
       fileUrl: fileInfo?.rawFileUrl,  // 传 URL，background.js 负责下载
+      storagePath: fileInfo?.storagePath,
       uploadTime: new Date().toISOString(),
       uploadIP: await getLocalIP()
     };
@@ -268,6 +279,7 @@
         width: Number(item.width),
         height: Number(item.height),
         taskId: taskId,
+        storagePath: extractStoragePath(item.raw_filepath)
       };
     });
 
@@ -299,6 +311,7 @@
       height: imageInfo?.height,
       labelIds,
       fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
+      storagePath: imageInfo?.storagePath,
       uploadTime: new Date().toISOString(),
       uploadIP: await getLocalIP()
     };
