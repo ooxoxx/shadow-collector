@@ -49,6 +49,29 @@ input[type="text"]:focus {
   border-color: #4a90d9;
 }
 
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: monospace;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #4a90d9;
+}
+
+.help-text {
+  display: block;
+  margin-top: 4px;
+  color: #888;
+  font-size: 12px;
+}
+
 .button-group {
   display: flex;
   gap: 8px;

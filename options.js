@@ -1,16 +1,19 @@
 // options.js
 const DEFAULT_URL = "http://127.0.0.1:8001";
 const STORAGE_KEY = "serverUrl";
+const ALLOWED_URLS_KEY = "allowedUrls";
 
 const serverUrlInput = document.getElementById("serverUrl");
+const allowedUrlsTextarea = document.getElementById("allowedUrls");
 const saveBtn = document.getElementById("saveBtn");
 const testBtn = document.getElementById("testBtn");
 const statusDiv = document.getElementById("status");
 
 // Load saved URL on page load
 document.addEventListener("DOMContentLoaded", async () => {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
+  const result = await chrome.storage.local.get([STORAGE_KEY, ALLOWED_URLS_KEY]);
   serverUrlInput.value = result[STORAGE_KEY] || DEFAULT_URL;
+  allowedUrlsTextarea.value = (result[ALLOWED_URLS_KEY] || []).join('\n');
 });
 
 // Show status message
@@ -46,7 +49,16 @@ saveBtn.addEventListener("click", async () => {
   // Remove trailing slash for consistency
   const normalizedUrl = url.replace(/\/+$/, "");
 
-  await chrome.storage.local.set({ [STORAGE_KEY]: normalizedUrl });
+  // Parse allowed URLs (split by newline, filter empty lines)
+  const allowedUrls = allowedUrlsTextarea.value
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  await chrome.storage.local.set({
+    [STORAGE_KEY]: normalizedUrl,
+    [ALLOWED_URLS_KEY]: allowedUrls
+  });
   serverUrlInput.value = normalizedUrl;
   showStatus("保存成功", "success");
 });
