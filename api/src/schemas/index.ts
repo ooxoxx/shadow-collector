@@ -22,7 +22,9 @@ export const detectionMetadataSchema = z.object({
   qaAnnotation: z.array(z.unknown()).default([]),
   // Upload metadata
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional()
+  uploadIP: z.string().nullable().optional(),
+  // Storage path for category extraction
+  storagePath: z.string().optional()
 });
 
 export type DetectionMetadata = z.infer<typeof detectionMetadataSchema>;
@@ -38,7 +40,9 @@ export const textQaMetadataSchema = z.object({
   annotations: z.unknown(), // Flexible annotation structure
   // Upload metadata
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional()
+  uploadIP: z.string().nullable().optional(),
+  // Storage path for category extraction
+  storagePath: z.string().optional()
 });
 
 export type TextQaMetadata = z.infer<typeof textQaMetadataSchema>;
@@ -55,7 +59,9 @@ export const classifyMetadataSchema = z.object({
   labelIds: z.array(z.number()),
   // Upload metadata
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional()
+  uploadIP: z.string().nullable().optional(),
+  // Storage path for category extraction
+  storagePath: z.string().optional()
 });
 
 export type ClassifyMetadata = z.infer<typeof classifyMetadataSchema>;

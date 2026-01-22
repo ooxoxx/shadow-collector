@@ -45,6 +45,7 @@ detectionRoute.post('/', async (c) => {
       fileBuffer: file.buffer,
       fileMimeType: file.mimeType,
       metadata: storedMetadata,
+      storagePath: metadata.storagePath,
     });
 
     return c.json({
