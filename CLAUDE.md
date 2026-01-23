@@ -64,7 +64,7 @@ The interceptor recognizes 4 workflow types by matching URL patterns:
 | Workflow | List API (cached) | Label API (triggers upload) |
 |----------|-------------------|----------------------------|
 | DETECTION | `/api/sampleListOfTask` | `/api/updateLabelInfo/{taskId}/{imageId}/label` |
-| TEXT_QA | `/api/get_json/{fileId}` | `/api/save_json/{fileId}` |
+| TEXT_QA | `/api/get_json/{fileId}` | `/api/save_json/{fileId}` 或 `/api/pass_json/{fileId}` |
 | CLASSIFY | `/api/classifyTasksList/{taskId}/{page}` | `/api/classifyTaskDataLabel/{taskId}/{imageId}` |
 | QA_PAIR | `/api/txt_label_task/review/get_data_by_file` | `/api/txt_label_task/review/update_qa_data` |
 

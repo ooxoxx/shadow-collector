@@ -12,7 +12,7 @@
 
     // 文本质检
     TEXT_QA_INFO: /\/api\/get_json\/[a-f0-9]{32}$/,
-    TEXT_QA_LABEL: /\/api\/save_json\/[a-f0-9]{32}$/,
+    TEXT_QA_LABEL: /\/api\/(save_json|pass_json)\/[a-f0-9]{32}$/,
 
     // 图像分类
     CLASSIFY_LIST: /\/api\/classifyTasksList\/[a-f0-9]{32}\/\d+/,
@@ -37,33 +37,6 @@
 
   // 当前问答对文件 (用于 update_qa_data 匹配)
   let currentQAPairFile = null;
-
-  // 客户端本地IP缓存
-  let clientIP = null;
-
-  // 通过 WebRTC 获取本地IP
-  async function getLocalIP() {
-    if (clientIP) return clientIP;
-    return new Promise((resolve) => {
-      const pc = new RTCPeerConnection({ iceServers: [] });
-      pc.createDataChannel('');
-      pc.createOffer().then(offer => pc.setLocalDescription(offer));
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          const ipMatch = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
-          if (ipMatch) {
-            clientIP = ipMatch[0];
-            resolve(clientIP);
-            pc.close();
-          }
-        }
-      };
-      setTimeout(() => { pc.close(); resolve(null); }, 1000);
-    });
-  }
-
-  // 初始化时获取IP
-  getLocalIP();
 
   // 发送消息到 background.js (通过 content.js 中继)
   function sendToBackground(workflowType, payload) {
@@ -188,8 +161,7 @@
       qaAnnotation,           // 始终包含，后端判断类型
       fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
       storagePath: imageInfo?.storagePath,
-      uploadTime: new Date().toISOString(),
-      uploadIP: await getLocalIP()
+      uploadTime: new Date().toISOString()
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -229,7 +201,7 @@
 
   // 处理 TEXT_QA_LABEL 请求 - 构建 payload 并发送 (异步)
   async function handleTextQALabel(url, reqBody) {
-    const match = url.match(/\/api\/save_json\/([a-f0-9]{32})/);
+    const match = url.match(/\/api\/(?:save_json|pass_json)\/([a-f0-9]{32})/);
     if (!match) return null;
 
     const fileId = match[1];
@@ -256,8 +228,7 @@
       annotations,
       fileUrl: fileInfo?.rawFileUrl,  // 传 URL，background.js 负责下载
       storagePath: fileInfo?.storagePath,
-      uploadTime: new Date().toISOString(),
-      uploadIP: await getLocalIP()
+      uploadTime: new Date().toISOString()
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -322,8 +293,7 @@
       labelIds,
       fileUrl: imageInfo?.imageUrl,  // 传 URL，background.js 负责下载
       storagePath: imageInfo?.storagePath,
-      uploadTime: new Date().toISOString(),
-      uploadIP: await getLocalIP()
+      uploadTime: new Date().toISOString()
     };
 
     console.log("%c 📦 Payload 已构建:", "color: orange;", {
@@ -391,8 +361,7 @@
       annotation: body,  // 包含 dataId, questionType, editedInput, editedAnswer 等
       fileUrl: fileInfo.fileUrl,
       storagePath: fileInfo.storagePath,
-      uploadTime: new Date().toISOString(),
-      uploadIP: await getLocalIP()
+      uploadTime: new Date().toISOString()
     };
 
     console.log('%c 📦 Payload 已构建:', 'color: orange;', {
