@@ -22,6 +22,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/package.json ./
 
+# Create logs directory
+RUN mkdir -p /app/logs
+
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=8001

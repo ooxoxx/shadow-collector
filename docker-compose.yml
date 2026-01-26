@@ -15,6 +15,8 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-shadow-collector}
       - MINIO_REGION=us-east-1
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       minio:
         condition: service_healthy
