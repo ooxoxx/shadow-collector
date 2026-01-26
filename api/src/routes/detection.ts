@@ -38,6 +38,7 @@ detectionRoute.post('/', async (c) => {
       uploadIP,
       // Storage metadata
       annotationType,
+      storagePath: metadata.storagePath,
       storedAt: new Date().toISOString(),
     };
 

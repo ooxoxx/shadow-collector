@@ -27,6 +27,7 @@ textQaRoute.post('/', async (c) => {
       uploadTime: metadata.uploadTime,
       uploadIP,
       // Storage metadata
+      storagePath: metadata.storagePath,
       storedAt: new Date().toISOString(),
     };
 

@@ -24,6 +24,7 @@ qaPairRoute.post('/', async (c) => {
       annotation: metadata.annotation,
       uploadTime: metadata.uploadTime,
       uploadIP,
+      storagePath: metadata.storagePath,
       storedAt: new Date().toISOString(),
     };
 
