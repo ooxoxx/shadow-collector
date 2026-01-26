@@ -12,6 +12,10 @@ detectionRoute.post('/', async (c) => {
       detectionMetadataSchema
     );
 
+    // 从请求获取客户端 IP
+    const forwarded = c.req.header('x-forwarded-for');
+    const uploadIP = forwarded ? forwarded.split(',')[0].trim() : c.req.header('x-real-ip') || null;
+
     // Determine annotation type based on multimodal fields
     const isMultimodal =
       (metadata.descriptionAnnotation?.length ?? 0) > 0 ||
@@ -31,7 +35,7 @@ detectionRoute.post('/', async (c) => {
       qaAnnotation: metadata.qaAnnotation,
       // Upload metadata
       uploadTime: metadata.uploadTime,
-      uploadIP: metadata.uploadIP,
+      uploadIP,
       // Storage metadata
       annotationType,
       storedAt: new Date().toISOString(),

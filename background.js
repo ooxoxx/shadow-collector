@@ -40,7 +40,6 @@ async function downloadFile(url) {
 function buildMetadata(workflowType, payload) {
   const common = {
     uploadTime: payload.uploadTime,
-    uploadIP: payload.uploadIP,
     storagePath: payload.storagePath
   };
 

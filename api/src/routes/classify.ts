@@ -12,6 +12,10 @@ classifyRoute.post('/', async (c) => {
       classifyMetadataSchema
     );
 
+    // 从请求获取客户端 IP
+    const forwarded = c.req.header('x-forwarded-for');
+    const uploadIP = forwarded ? forwarded.split(',')[0].trim() : c.req.header('x-real-ip') || null;
+
     // Build metadata with timestamp
     const storedMetadata = {
       taskId: metadata.taskId,
@@ -22,7 +26,7 @@ classifyRoute.post('/', async (c) => {
       labelIds: metadata.labelIds,
       // Upload metadata
       uploadTime: metadata.uploadTime,
-      uploadIP: metadata.uploadIP,
+      uploadIP,
       // Storage metadata
       storedAt: new Date().toISOString(),
     };

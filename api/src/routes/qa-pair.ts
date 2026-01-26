@@ -12,6 +12,10 @@ qaPairRoute.post('/', async (c) => {
       qaPairMetadataSchema
     );
 
+    // 从请求获取客户端 IP
+    const forwarded = c.req.header('x-forwarded-for');
+    const uploadIP = forwarded ? forwarded.split(',')[0].trim() : c.req.header('x-real-ip') || null;
+
     const storedMetadata = {
       taskId: metadata.taskId,
       dataTxtId: metadata.dataTxtId,
@@ -19,7 +23,7 @@ qaPairRoute.post('/', async (c) => {
       department: metadata.department,
       annotation: metadata.annotation,
       uploadTime: metadata.uploadTime,
-      uploadIP: metadata.uploadIP,
+      uploadIP,
       storedAt: new Date().toISOString(),
     };
 

@@ -22,7 +22,6 @@ export const detectionMetadataSchema = z.object({
   qaAnnotation: z.array(z.unknown()).default([]),
   // Upload metadata
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional(),
   // Storage path for category extraction
   storagePath: z.string().optional()
 });
@@ -40,7 +39,6 @@ export const textQaMetadataSchema = z.object({
   annotations: z.unknown(), // Flexible annotation structure
   // Upload metadata
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional(),
   // Storage path for category extraction
   storagePath: z.string().optional()
 });
@@ -59,7 +57,6 @@ export const classifyMetadataSchema = z.object({
   labelIds: z.array(z.number()),
   // Upload metadata
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional(),
   // Storage path for category extraction
   storagePath: z.string().optional()
 });
@@ -84,7 +81,6 @@ export const qaPairMetadataSchema = z.object({
     editedAnswer: z.string().optional()
   }),
   uploadTime: z.string().optional(),
-  uploadIP: z.string().nullable().optional(),
   storagePath: z.string().optional()
 });
 
