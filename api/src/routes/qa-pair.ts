@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { qaPairMetadataSchema } from '../schemas';
 import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
+import { getClientIP } from '../utils/ip';
 
 export const qaPairRoute = new Hono();
 
@@ -13,8 +14,7 @@ qaPairRoute.post('/', async (c) => {
     );
 
     // 从请求获取客户端 IP
-    const forwarded = c.req.header('x-forwarded-for');
-    const uploadIP = forwarded ? forwarded.split(',')[0].trim() : c.req.header('x-real-ip') || null;
+    const uploadIP = getClientIP(c);
 
     const storedMetadata = {
       taskId: metadata.taskId,

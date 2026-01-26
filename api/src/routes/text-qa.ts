@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { textQaMetadataSchema } from '../schemas';
 import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
+import { getClientIP } from '../utils/ip';
 
 export const textQaRoute = new Hono();
 
@@ -13,8 +14,7 @@ textQaRoute.post('/', async (c) => {
     );
 
     // 从请求获取客户端 IP
-    const forwarded = c.req.header('x-forwarded-for');
-    const uploadIP = forwarded ? forwarded.split(',')[0].trim() : c.req.header('x-real-ip') || null;
+    const uploadIP = getClientIP(c);
 
     // Build metadata with timestamp
     const storedMetadata = {
