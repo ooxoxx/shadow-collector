@@ -3,6 +3,7 @@ import { classifyMetadataSchema } from '../schemas';
 import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
 import { getClientIP } from '../utils/ip';
+import { logUpload, logError } from '../utils/logger';
 
 export const classifyRoute = new Hono();
 
@@ -43,6 +44,17 @@ classifyRoute.post('/', async (c) => {
       storagePath: metadata.storagePath,
     });
 
+    // Log successful upload
+    logUpload('CLASSIFY', {
+      taskId: metadata.taskId,
+      imageId: metadata.imageId,
+      filename: metadata.filename,
+      fileSize: `${(file.buffer.length / 1024).toFixed(1)}KB`,
+      ip: uploadIP,
+      filePath,
+      metadataPath,
+    });
+
     return c.json({
       success: true,
       data: {
@@ -53,6 +65,7 @@ classifyRoute.post('/', async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid request';
     console.error('❌ [classify] 请求处理失败:', message);
+    logError('CLASSIFY', message, error);
     return c.json({ success: false, error: message }, 400);
   }
 });

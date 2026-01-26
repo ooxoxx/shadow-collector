@@ -3,6 +3,7 @@ import { qaPairMetadataSchema } from '../schemas';
 import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
 import { getClientIP } from '../utils/ip';
+import { logUpload, logError } from '../utils/logger';
 
 export const qaPairRoute = new Hono();
 
@@ -38,6 +39,17 @@ qaPairRoute.post('/', async (c) => {
       storagePath: metadata.storagePath,
     });
 
+    // Log successful upload
+    logUpload('QA_PAIR', {
+      taskId: metadata.taskId,
+      dataTxtId: metadata.dataTxtId,
+      filename: metadata.filename,
+      fileSize: `${(file.buffer.length / 1024).toFixed(1)}KB`,
+      ip: uploadIP,
+      filePath,
+      metadataPath,
+    });
+
     return c.json({
       success: true,
       data: { filePath, metadataPath },
@@ -45,6 +57,7 @@ qaPairRoute.post('/', async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid request';
     console.error('❌ [qa-pair] 请求处理失败:', message);
+    logError('QA_PAIR', message, error);
     return c.json({ success: false, error: message }, 400);
   }
 });

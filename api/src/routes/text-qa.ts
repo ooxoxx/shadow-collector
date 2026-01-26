@@ -3,6 +3,7 @@ import { textQaMetadataSchema } from '../schemas';
 import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
 import { getClientIP } from '../utils/ip';
+import { logUpload, logError } from '../utils/logger';
 
 export const textQaRoute = new Hono();
 
@@ -44,6 +45,18 @@ textQaRoute.post('/', async (c) => {
       storagePath: metadata.storagePath,
     });
 
+    // Log successful upload
+    logUpload('TEXT_QA', {
+      taskId: metadata.taskId,
+      fileId: metadata.fileId,
+      batchId: metadata.batchId,
+      filename: metadata.filename,
+      fileSize: `${(file.buffer.length / 1024).toFixed(1)}KB`,
+      ip: uploadIP,
+      filePath,
+      metadataPath,
+    });
+
     return c.json({
       success: true,
       data: {
@@ -54,6 +67,7 @@ textQaRoute.post('/', async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid request';
     console.error('❌ [text-qa] 请求处理失败:', message);
+    logError('TEXT_QA', message, error);
     return c.json({ success: false, error: message }, 400);
   }
 });

@@ -3,6 +3,7 @@ import { detectionMetadataSchema } from '../schemas';
 import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
 import { getClientIP } from '../utils/ip';
+import { logUpload, logError } from '../utils/logger';
 
 export const detectionRoute = new Hono();
 
@@ -53,6 +54,18 @@ detectionRoute.post('/', async (c) => {
       storagePath: metadata.storagePath,
     });
 
+    // Log successful upload
+    logUpload('DETECTION', {
+      taskId: metadata.taskId,
+      imageId: metadata.imageId,
+      filename: metadata.filename,
+      fileSize: `${(file.buffer.length / 1024).toFixed(1)}KB`,
+      ip: uploadIP,
+      filePath,
+      metadataPath,
+      annotationType,
+    });
+
     return c.json({
       success: true,
       data: {
@@ -64,6 +77,7 @@ detectionRoute.post('/', async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid request';
     console.error('❌ [detection] 请求处理失败:', message);
+    logError('DETECTION', message, error);
     return c.json({ success: false, error: message }, 400);
   }
 });
