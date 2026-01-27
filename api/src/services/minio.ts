@@ -1,7 +1,9 @@
 import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { env } from '../config/env';
+import { getCategoriesFromLabels, CategoryInfo } from '../utils/category-mapper';
 
-const s3Client = new S3Client({
+// S3 client instance - can be replaced for testing
+let s3Client: S3Client = new S3Client({
   endpoint: env.minio.endpoint,
   region: env.minio.region,
   credentials: {
@@ -10,6 +12,35 @@ const s3Client = new S3Client({
   },
   forcePathStyle: true, // Required for MinIO
 });
+
+/**
+ * Get the current S3 client instance
+ */
+export function getS3Client(): S3Client {
+  return s3Client;
+}
+
+/**
+ * Set a custom S3 client (for testing)
+ */
+export function setS3Client(client: S3Client): void {
+  s3Client = client;
+}
+
+/**
+ * Reset S3 client to default (for testing cleanup)
+ */
+export function resetS3Client(): void {
+  s3Client = new S3Client({
+    endpoint: env.minio.endpoint,
+    region: env.minio.region,
+    credentials: {
+      accessKeyId: env.minio.accessKey,
+      secretAccessKey: env.minio.secretKey,
+    },
+    forcePathStyle: true,
+  });
+}
 
 export type LabelType = 'detection' | 'multimodal' | 'text-qa' | 'classify' | 'qa-pair';
 
@@ -20,81 +51,89 @@ interface StoreOptions {
   fileBuffer: Buffer;
   fileMimeType: string;
   metadata: Record<string, unknown>;
-  storagePath?: string;  // Original storage path for category extraction
+  labels?: string[];  // Annotation labels for category-based storage
 }
 
 /**
- * Parse storage path to extract category directories
- * Input: "原始样本区/天津/20251226-1435/设备-输电/未分类/未分类/未分类/filename.jpg"
- * Output: { category1: "设备-输电", category2: "未分类" }
+ * Get current month in YYYY-MM format
  */
-function parseStoragePath(storagePath: string): { category1: string; category2: string } | null {
-  const segments = storagePath.split('/').filter(s => s.length > 0);
-  // Skip first 3 segments, take 4th and 5th
-  if (segments.length >= 5) {
-    return {
-      category1: segments[3],
-      category2: segments[4],
-    };
-  }
-  return null;
-}
-
-/**
- * Get today's date in YYYY-MM-DD format
- */
-function getDatePath(): string {
+function getMonthPath(): string {
   const now = new Date();
-  return now.toISOString().split('T')[0];
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
 }
 
 /**
  * Store a file and its metadata to MinIO
- * Structure: {bucket}/{type}/{date}/{filename}
+ * Structure: {bucket}/{type}/{month}/{category1}/{category2}/{filename}
+ * Supports storing to multiple category paths if labels match multiple categories
  */
-export async function storeWithMetadata(options: StoreOptions): Promise<{ filePath: string; metadataPath: string }> {
-  const { type, filename, fileBuffer, fileMimeType, metadata, storagePath } = options;
-  const datePath = getDatePath();
+export async function storeWithMetadata(options: StoreOptions): Promise<{ filePath: string; metadataPath: string; allPaths?: string[] }> {
+  const { type, filename, fileBuffer, fileMimeType, metadata, labels } = options;
+  const monthPath = getMonthPath();
 
-  // Try to parse category from storagePath, otherwise fallback to type
-  let basePath: string;
-  if (storagePath) {
-    const categories = parseStoragePath(storagePath);
-    if (categories) {
-      basePath = `${type}/${categories.category1}/${categories.category2}/${datePath}`;
-    } else {
-      basePath = `${type}/${datePath}`;
+  // Default fallback category
+  const defaultCategory: CategoryInfo = {
+    category1: '未分类',
+    category2: '未分类',
+  };
+
+  // Get categories from labels, or use default
+  let categories: CategoryInfo[] = [];
+  if (labels && labels.length > 0) {
+    categories = getCategoriesFromLabels(labels);
+    if (categories.length === 0) {
+      console.warn(`⚠️ No matching categories for labels: ${labels.join(', ')}, using default`);
+      categories = [defaultCategory];
     }
   } else {
-    basePath = `${type}/${datePath}`;
+    categories = [defaultCategory];
   }
 
-  const filePath = `${basePath}/${filename}`;
+  // Store file to all matching category paths
+  const allPaths: string[] = [];
   const stem = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
-  const metadataPath = `${basePath}/${stem}.json`;
 
-  // Upload the file
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: env.minio.bucket,
-      Key: filePath,
-      Body: fileBuffer,
-      ContentType: fileMimeType,
-    })
-  );
+  for (const category of categories) {
+    const basePath = `${type}/${monthPath}/${category.category1}/${category.category2}`;
+    const filePath = `${basePath}/${filename}`;
+    const metadataPath = `${basePath}/${stem}.json`;
 
-  // Upload the metadata JSON
-  const metadataJson = JSON.stringify(metadata, null, 2);
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: env.minio.bucket,
-      Key: metadataPath,
-      Body: metadataJson,
-      ContentType: 'application/json',
-    })
-  );
+    // Upload the file
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: env.minio.bucket,
+        Key: filePath,
+        Body: fileBuffer,
+        ContentType: fileMimeType,
+      })
+    );
 
-  return { filePath, metadataPath };
+    // Upload the metadata JSON
+    const metadataJson = JSON.stringify(metadata, null, 2);
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: env.minio.bucket,
+        Key: metadataPath,
+        Body: metadataJson,
+        ContentType: 'application/json',
+      })
+    );
+
+    allPaths.push(filePath);
+    console.log(`✅ 已存储到: ${filePath}`);
+  }
+
+  // Return the first path as primary, and all paths in allPaths
+  const primaryPath = allPaths[0];
+  const primaryMetadataPath = `${primaryPath.substring(0, primaryPath.lastIndexOf('/'))}/${stem}.json`;
+
+  return {
+    filePath: primaryPath,
+    metadataPath: primaryMetadataPath,
+    allPaths: allPaths.length > 1 ? allPaths : undefined,
+  };
 }
 
 /**

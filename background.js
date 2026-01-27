@@ -33,6 +33,15 @@ const ENDPOINTS = {
 async function downloadFile(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+
+  // 检查返回的是否为 HTML（认证失败或路径错误的特征）
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    console.error('❌ 下载失败: 服务器返回 HTML 而非文件');
+    console.error('❌ 可能原因: auth token 过期或 URL 路径错误');
+    throw new Error('Download failed: server returned HTML instead of file');
+  }
+
   return response.blob();
 }
 

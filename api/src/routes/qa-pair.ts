@@ -36,7 +36,6 @@ qaPairRoute.post('/', async (c) => {
       fileBuffer: file.buffer,
       fileMimeType: file.mimeType,
       metadata: storedMetadata,
-      storagePath: metadata.storagePath,
     });
 
     // Log successful upload

@@ -56,6 +56,43 @@ export const classifyMetadata = {
   labelIds: [1853, 1827],
 };
 
+// QA-Pair complete metadata fixture
+export const qaPairMetadata = {
+  taskId: 'qa-pair-task-001',
+  dataTxtId: 'txt-data-001',
+  filename: 'qa-pair-data.json',
+  department: 'test-department',
+  annotation: {
+    dataId: 12345,
+    isAvailable: 'yes',
+    questionType: 'factual',
+    applicableRole: 'assistant',
+    applicableScene: 'customer-service',
+    editedInput: 'What is the weather today?',
+    editedAnswer: 'I cannot provide real-time weather information.',
+  },
+  uploadTime: new Date().toISOString(),
+  storagePath: '原始样本区/qa-pair/test.json',
+};
+
+// QA-Pair minimal metadata fixture (only required fields)
+export const qaPairMetadataMinimal = {
+  taskId: 'qa-pair-minimal-001',
+  filename: 'qa-pair-minimal.json',
+  annotation: {
+    dataId: 67890,
+  },
+};
+
+// Sample JSON buffer for text-based uploads
+export const sampleJsonBuffer = Buffer.from(
+  JSON.stringify({
+    test: 'data',
+    timestamp: Date.now(),
+    items: [1, 2, 3],
+  })
+);
+
 /**
  * Helper to create FormData for multipart requests
  */

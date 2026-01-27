@@ -7,6 +7,8 @@ import { textQaRoute } from './routes/text-qa';
 import { classifyRoute } from './routes/classify';
 import { qaPairRoute } from './routes/qa-pair';
 import { checkMinioConnection } from './services/minio';
+import { loadCategoryMapping } from './utils/category-mapper';
+import { loadLabelIdMapping } from './utils/label-id-mapper';
 
 const app = new Hono();
 
@@ -61,7 +63,15 @@ app.notFound((c) => {
 // Startup with dependency checks
 async function startup() {
   console.log('正在检查依赖服务...');
+
+  // Load category mappings
+  console.log('正在加载标签分类映射...');
+  loadCategoryMapping();
+  loadLabelIdMapping();
+
+  // Check MinIO connection
   await checkMinioConnection();
+
   console.log(`Starting server on port ${env.port}...`);
 }
 

@@ -1,6 +1,7 @@
 {
   "name": "shadow-collector-api",
   "version": "1.0.0",
+  "packageManager": "bun@1.0.0",
   "description": "API service for receiving label data and storing to MinIO",
   "scripts": {
     "dev": "bun run --hot src/index.ts",

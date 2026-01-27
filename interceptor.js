@@ -92,7 +92,7 @@
     items.forEach(item => {
       imageCache[item.id] = {
         filename: item.filename,
-        imageUrl: `${baseUrl}/${item.storage_path}`,
+        imageUrl: `${baseUrl}/${encodeURI(item.storage_path)}`,
         width: Number(item.width),
         height: Number(item.height),
         storagePath: extractStoragePath(item.storage_path)
@@ -190,7 +190,7 @@
     if (data) {
       textQACache[fileId] = {
         filename: data.filename,
-        rawFileUrl: `${baseUrl}/${data.raw_filepath}`,
+        rawFileUrl: `${baseUrl}/${encodeURI(data.raw_filepath)}`,
         taskId: data.task_id,
         batchId: data.batch_id,
         storagePath: extractStoragePath(data.raw_filepath)
@@ -256,7 +256,7 @@
     items.forEach(item => {
       classifyCache[item.id] = {
         filename: item.filename,
-        imageUrl: `${baseUrl}/${item.raw_filepath}`,
+        imageUrl: `${baseUrl}/${encodeURI(item.raw_filepath)}`,
         width: Number(item.width),
         height: Number(item.height),
         taskId: taskId,
@@ -325,7 +325,7 @@
         taskId,
         dataTxtId,
         filename: data.origin_file_path.split('/').pop()?.split('?')[0] || 'unknown',
-        fileUrl: `${baseUrl}/${data.origin_file_path}`,
+        fileUrl: `${baseUrl}/${encodeURI(data.origin_file_path)}`,
         department: data.file_department,
         storagePath: extractStoragePath(data.origin_file_path),
         qaDataList: data.qa_data_list || []

@@ -4,6 +4,7 @@ import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
 import { getClientIP } from '../utils/ip';
 import { logUpload, logError } from '../utils/logger';
+import { extractLabelsFromAnnotations } from '../utils/category-mapper';
 
 export const detectionRoute = new Hono();
 
@@ -23,6 +24,10 @@ detectionRoute.post('/', async (c) => {
       (metadata.qaAnnotation?.length ?? 0) > 0;
     const annotationType = isMultimodal ? 'multimodal' : 'detection';
 
+    // Extract labels from annotations
+    const labels = extractLabelsFromAnnotations(metadata.annotations);
+    console.log(`📊 提取到 ${labels.length} 个标签: ${labels.join(', ')}`);
+
     // Build metadata with timestamp and type info
     const storedMetadata = {
       taskId: metadata.taskId,
@@ -31,6 +36,7 @@ detectionRoute.post('/', async (c) => {
       width: metadata.width,
       height: metadata.height,
       annotations: metadata.annotations,
+      labels,  // Include extracted labels
       // Include multimodal fields
       descriptionAnnotation: metadata.descriptionAnnotation,
       qaAnnotation: metadata.qaAnnotation,
@@ -44,14 +50,14 @@ detectionRoute.post('/', async (c) => {
     };
 
     // Store to MinIO - path uses annotationType
-    const { filePath, metadataPath } = await storeWithMetadata({
+    const { filePath, metadataPath, allPaths } = await storeWithMetadata({
       type: annotationType,
       taskId: metadata.taskId,
       filename: metadata.filename,
       fileBuffer: file.buffer,
       fileMimeType: file.mimeType,
       metadata: storedMetadata,
-      storagePath: metadata.storagePath,
+      labels,  // Pass labels for category-based storage
     });
 
     // Log successful upload
@@ -64,6 +70,8 @@ detectionRoute.post('/', async (c) => {
       filePath,
       metadataPath,
       annotationType,
+      labels: labels.join(', '),
+      categories: allPaths ? allPaths.length : 1,
     });
 
     return c.json({
@@ -72,6 +80,7 @@ detectionRoute.post('/', async (c) => {
         annotationType,
         filePath,
         metadataPath,
+        allPaths,
       },
     });
   } catch (error) {

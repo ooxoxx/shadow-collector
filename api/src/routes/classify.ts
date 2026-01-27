@@ -4,6 +4,7 @@ import { parseMultipartWithMetadata } from '../utils/multipart';
 import { storeWithMetadata } from '../services/minio';
 import { getClientIP } from '../utils/ip';
 import { logUpload, logError } from '../utils/logger';
+import { getLabelsFromIds } from '../utils/label-id-mapper';
 
 export const classifyRoute = new Hono();
 
@@ -17,6 +18,10 @@ classifyRoute.post('/', async (c) => {
     // 从请求获取客户端 IP
     const uploadIP = getClientIP(c);
 
+    // Convert label IDs to label strings
+    const labels = getLabelsFromIds(metadata.labelIds);
+    console.log(`📊 将 labelIds [${metadata.labelIds.join(', ')}] 转换为标签: ${labels.join(', ')}`);
+
     // Build metadata with timestamp
     const storedMetadata = {
       taskId: metadata.taskId,
@@ -25,6 +30,7 @@ classifyRoute.post('/', async (c) => {
       width: metadata.width,
       height: metadata.height,
       labelIds: metadata.labelIds,
+      labels,  // Include converted labels
       // Upload metadata
       uploadTime: metadata.uploadTime,
       uploadIP,
@@ -34,14 +40,14 @@ classifyRoute.post('/', async (c) => {
     };
 
     // Store to MinIO
-    const { filePath, metadataPath } = await storeWithMetadata({
+    const { filePath, metadataPath, allPaths } = await storeWithMetadata({
       type: 'classify',
       taskId: metadata.taskId,
       filename: metadata.filename,
       fileBuffer: file.buffer,
       fileMimeType: file.mimeType,
       metadata: storedMetadata,
-      storagePath: metadata.storagePath,
+      labels,  // Pass labels for category-based storage
     });
 
     // Log successful upload
@@ -53,6 +59,8 @@ classifyRoute.post('/', async (c) => {
       ip: uploadIP,
       filePath,
       metadataPath,
+      labels: labels.join(', '),
+      categories: allPaths ? allPaths.length : 1,
     });
 
     return c.json({
@@ -60,6 +68,7 @@ classifyRoute.post('/', async (c) => {
       data: {
         filePath,
         metadataPath,
+        allPaths,
       },
     });
   } catch (error) {
