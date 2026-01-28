@@ -7,7 +7,8 @@
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
     "test": "bun test",
-    "test:e2e": "bun test tests/e2e"
+    "test:e2e": "bun test tests/e2e",
+    "migrate": "bun run src/scripts/migrate-storage.ts"
   },
   "dependencies": {
     "hono": "^4.0.0",

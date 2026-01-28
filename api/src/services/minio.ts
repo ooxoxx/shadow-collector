@@ -1,4 +1,12 @@
-import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  HeadBucketCommand,
+  GetObjectCommand,
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 import { env } from '../config/env';
 import { getCategoriesFromLabels, CategoryInfo } from '../utils/category-mapper';
 
@@ -147,4 +155,97 @@ export async function checkMinioConnection(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`MinIO 连接失败 (${env.minio.endpoint}): ${message}`);
   }
+}
+
+/**
+ * Get an object from MinIO as Buffer
+ */
+export async function getObject(key: string): Promise<Buffer> {
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: env.minio.bucket,
+      Key: key,
+    })
+  );
+
+  if (!response.Body) {
+    throw new Error(`Empty response body for key: ${key}`);
+  }
+
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Copy an object within MinIO
+ */
+export async function copyObject(sourceKey: string, destKey: string): Promise<void> {
+  await s3Client.send(
+    new CopyObjectCommand({
+      Bucket: env.minio.bucket,
+      CopySource: `${env.minio.bucket}/${sourceKey}`,
+      Key: destKey,
+    })
+  );
+}
+
+/**
+ * Delete an object from MinIO
+ */
+export async function deleteObject(key: string): Promise<void> {
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: env.minio.bucket,
+      Key: key,
+    })
+  );
+}
+
+/**
+ * Move an object (copy + delete)
+ */
+export async function moveObject(sourceKey: string, destKey: string): Promise<void> {
+  await copyObject(sourceKey, destKey);
+  await deleteObject(sourceKey);
+}
+
+/**
+ * List objects by prefix
+ */
+export async function listObjectsByPrefix(
+  prefix: string,
+  maxKeys?: number
+): Promise<{ key: string; size?: number; lastModified?: Date }[]> {
+  const results: { key: string; size?: number; lastModified?: Date }[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const response = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: env.minio.bucket,
+        Prefix: prefix,
+        MaxKeys: maxKeys ? Math.min(maxKeys - results.length, 1000) : 1000,
+        ContinuationToken: continuationToken,
+      })
+    );
+
+    if (response.Contents) {
+      for (const obj of response.Contents) {
+        if (obj.Key) {
+          results.push({
+            key: obj.Key,
+            size: obj.Size,
+            lastModified: obj.LastModified,
+          });
+        }
+      }
+    }
+
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken && (!maxKeys || results.length < maxKeys));
+
+  return results;
 }
