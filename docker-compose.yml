@@ -17,6 +17,7 @@ services:
       - MINIO_REGION=us-east-1
     volumes:
       - ./logs:/app/logs
+      - ./docs/classes.csv:/app/docs/classes.csv:ro
     depends_on:
       minio:
         condition: service_healthy

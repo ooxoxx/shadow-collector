@@ -21,9 +21,9 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/docs ./docs
 
-# Create logs directory
+# Create logs and docs directories
+RUN mkdir -p /app/logs /app/docs
 RUN mkdir -p /app/logs
 
 # Set environment variables
