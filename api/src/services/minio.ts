@@ -74,17 +74,19 @@ function getMonthPath(): string {
 
 /**
  * Store a file and its metadata to MinIO
- * Structure: {bucket}/{type}/{month}/{category1}/{category2}/{filename}
+ * Structure:
+ *   - Normal case: {bucket}/{type}/{month}/{category1}/{category2}/{filename}
+ *   - Single-level: {bucket}/{type}/{month}/{category1}/{filename} (when category2 is empty)
  * Supports storing to multiple category paths if labels match multiple categories
  */
 export async function storeWithMetadata(options: StoreOptions): Promise<{ filePath: string; metadataPath: string; allPaths?: string[] }> {
   const { type, filename, fileBuffer, fileMimeType, metadata, labels } = options;
   const monthPath = getMonthPath();
 
-  // Default fallback category
+  // Default fallback category (single-level 未分类/)
   const defaultCategory: CategoryInfo = {
     category1: '未分类',
-    category2: '未分类',
+    category2: '',  // Empty = single-level directory
   };
 
   // Get categories from labels, or use default
@@ -104,7 +106,10 @@ export async function storeWithMetadata(options: StoreOptions): Promise<{ filePa
   const stem = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
 
   for (const category of categories) {
-    const basePath = `${type}/${monthPath}/${category.category1}/${category.category2}`;
+    // Handle single-level directory when category2 is empty
+    const basePath = category.category2
+      ? `${type}/${monthPath}/${category.category1}/${category.category2}`
+      : `${type}/${monthPath}/${category.category1}`;
     const filePath = `${basePath}/${filename}`;
     const metadataPath = `${basePath}/${stem}.json`;
 
