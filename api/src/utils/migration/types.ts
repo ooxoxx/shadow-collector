@@ -65,6 +65,8 @@ export interface MigrationOptions {
  * Metadata JSON structure (from label annotations)
  */
 export interface MetadataJson {
+  labels?: string[];
+  labelIds?: number[];
   annotations?: AnnotationEntry[];
   [key: string]: unknown;
 }

@@ -213,8 +213,8 @@ export async function deleteObject(key: string): Promise<void> {
  * Move an object (copy + delete)
  */
 export async function moveObject(sourceKey: string, destKey: string): Promise<void> {
-  await copyObject(sourceKey, destKey);
-  await deleteObject(sourceKey);
+  await copyObject(encodeURIComponent(sourceKey), encodeURIComponent(destKey));
+  await deleteObject(encodeURIComponent(sourceKey));
 }
 
 /**

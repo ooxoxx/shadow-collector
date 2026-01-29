@@ -119,18 +119,84 @@ curl http://127.0.0.1:8001/health
 ```
 shadow-collector/
 ├── detection/
-│   └── 2026-01-21/
-│       └── {taskId}/
+│   └── 2026-01/
+│       └── {category1}/{category2}/
 │           ├── {filename}       # Original image
 │           └── {filename}.json  # Metadata
 ├── text-qa/
-│   └── 2026-01-21/
+│   └── 2026-01/
 │       └── {taskId}/
 │           ├── {filename}       # Original file
 │           └── {filename}.json  # QA data
 └── classify/
-    └── 2026-01-21/
+    └── 2026-01/
         └── {taskId}/
             ├── {filename}       # Original image
             └── {filename}.json  # Classification labels
 ```
+
+## Migration
+
+Migrate files from old directory structure to new category-based structure.
+
+### Prerequisites
+
+- MinIO connection configured via environment variables
+- `docs/classes.csv` - Category mapping file
+- `logs/obj.json` - Object list (for initial migration)
+
+### Local Usage
+
+```bash
+# Preview changes (dry run)
+bun run migrate -- --dry-run
+
+# Run migration
+bun run migrate
+
+# Verbose output
+bun run migrate -- --verbose
+
+# Reclassify uncategorized files only
+bun run migrate -- --reclassify
+
+# List uncategorized files without migrating
+bun run migrate -- --list-uncategorized
+```
+
+### Docker Compose Usage
+
+#### 1. Prepare obj.json (export object list from MinIO)
+
+```bash
+docker run --rm --network shadow-collector_shadow-network minio/mc \
+  sh -c "mc alias set myminio http://minio:9000 minioadmin minioadmin && \
+         mc ls myminio/shadow-collector --recursive --json" > logs/obj.json
+```
+
+#### 2. Run migration
+
+```bash
+# Dry run (preview changes)
+docker compose exec api bun run migrate -- --dry-run --verbose
+
+# Execute migration
+docker compose exec api bun run migrate -- --verbose
+
+# Reclassify uncategorized files only
+docker compose exec api bun run migrate -- --reclassify --verbose
+
+# List uncategorized files
+docker compose exec api bun run migrate -- --list-uncategorized
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Preview changes without executing |
+| `--verbose, -v` | Show detailed output |
+| `--obj-list <path>` | Path to obj.json file (default: `/app/logs/obj.json`) |
+| `--classes <path>` | Path to classes.csv file (default: `/docs/classes.csv`) |
+| `--reclassify` | Re-process uncategorized files only |
+| `--list-uncategorized` | List uncategorized files without migrating |
