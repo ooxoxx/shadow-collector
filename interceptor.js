@@ -77,6 +77,13 @@
     return window.location.origin;
   }
 
+  // 对路径的每个段落分别编码，保留 / 分隔符
+  // 解决 encodeURI() 无法正确编码中文路径的问题
+  function encodePathSegments(path) {
+    if (!path) return '';
+    return path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+  }
+
   // 从带 auth 参数的路径中提取纯路径
   function extractStoragePath(rawPath) {
     if (!rawPath) return null;
@@ -92,7 +99,7 @@
     items.forEach(item => {
       imageCache[item.id] = {
         filename: item.filename,
-        imageUrl: `${baseUrl}/${encodeURI(item.storage_path)}`,
+        imageUrl: `${baseUrl}/${encodePathSegments(item.storage_path)}`,
         width: Number(item.width),
         height: Number(item.height),
         storagePath: extractStoragePath(item.storage_path)
@@ -190,7 +197,7 @@
     if (data) {
       textQACache[fileId] = {
         filename: data.filename,
-        rawFileUrl: `${baseUrl}/${encodeURI(data.raw_filepath)}`,
+        rawFileUrl: `${baseUrl}/${encodePathSegments(data.raw_filepath)}`,
         taskId: data.task_id,
         batchId: data.batch_id,
         storagePath: extractStoragePath(data.raw_filepath)
@@ -256,7 +263,7 @@
     items.forEach(item => {
       classifyCache[item.id] = {
         filename: item.filename,
-        imageUrl: `${baseUrl}/${encodeURI(item.raw_filepath)}`,
+        imageUrl: `${baseUrl}/${encodePathSegments(item.raw_filepath)}`,
         width: Number(item.width),
         height: Number(item.height),
         taskId: taskId,
@@ -325,7 +332,7 @@
         taskId,
         dataTxtId,
         filename: data.origin_file_path.split('/').pop()?.split('?')[0] || 'unknown',
-        fileUrl: `${baseUrl}/${encodeURI(data.origin_file_path)}`,
+        fileUrl: `${baseUrl}/${encodePathSegments(data.origin_file_path)}`,
         department: data.file_department,
         storagePath: extractStoragePath(data.origin_file_path),
         qaDataList: data.qa_data_list || []
