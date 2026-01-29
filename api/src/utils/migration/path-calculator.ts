@@ -39,6 +39,7 @@ export function extractDateFromPath(path: string): string {
 
 /**
  * Calculate new path for a file
+ * Standard format: {type}/{YYYY-MM}/{category1}/{category2}/{filename}
  */
 export function calculateNewPath(
   oldPath: string,
@@ -47,7 +48,10 @@ export function calculateNewPath(
 ): string {
   const type = extractTypeFromPath(oldPath);
   const filename = oldPath.split('/').pop() || '';
-  return `${type}/${dateMonth}/${category.category1}/${category.category2}/${filename}`;
+  // Ensure both categories have values (use 未分类 as fallback)
+  const cat1 = category.category1 || '未分类';
+  const cat2 = category.category2 || '未分类';
+  return `${type}/${dateMonth}/${cat1}/${cat2}/${filename}`;
 }
 
 /**

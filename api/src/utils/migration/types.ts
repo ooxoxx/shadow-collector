@@ -59,6 +59,8 @@ export interface MigrationOptions {
   classesPath: string;
   reclassify: boolean;
   listUncategorized: boolean;
+  scanAll: boolean;
+  listNonCompliant: boolean;
 }
 
 /**

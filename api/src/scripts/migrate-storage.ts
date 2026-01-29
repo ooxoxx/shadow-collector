@@ -8,12 +8,14 @@
  *   bun run src/scripts/migrate-storage.ts [options]
  *
  * Options:
- *   --dry-run           Preview changes without executing
- *   --verbose           Show detailed output
- *   --obj-list <path>   Path to obj.json file (default: /app/logs/obj.json)
- *   --classes <path>    Path to classes.csv file (default: /docs/classes.csv)
- *   --reclassify        Re-process uncategorized files only
- *   --list-uncategorized List uncategorized files without migrating
+ *   --dry-run              Preview changes without executing
+ *   --verbose              Show detailed output
+ *   --obj-list <path>      Path to obj.json file (default: /app/logs/obj.json)
+ *   --classes <path>       Path to classes.csv file (default: /docs/classes.csv)
+ *   --reclassify           Re-process uncategorized files only
+ *   --list-uncategorized   List uncategorized files without migrating
+ *   --scan-all             Scan all files, auto-detect and migrate non-compliant paths
+ *   --list-non-compliant   List non-compliant files without migrating
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -44,6 +46,8 @@ import {
   isCorrectLocation,
   isUncategorizedPath,
   groupUncategorizedPairs,
+  scanBucketForNonCompliant,
+  getPathViolationType,
 } from '../utils/migration';
 
 // Colors for terminal output
@@ -52,6 +56,7 @@ const colors = {
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
+  cyan: '\x1b[36m',
   reset: '\x1b[0m',
 };
 
@@ -85,6 +90,8 @@ function parseCliArgs(): MigrationOptions {
       classes: { type: 'string', default: '/docs/classes.csv' },
       reclassify: { type: 'boolean', default: false },
       'list-uncategorized': { type: 'boolean', default: false },
+      'scan-all': { type: 'boolean', default: false },
+      'list-non-compliant': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
     strict: true,
@@ -97,13 +104,21 @@ MinIO Storage Migration Script
 Usage: bun run migrate [options]
 
 Options:
-  --dry-run             Preview changes without executing
-  --verbose, -v         Show detailed output
-  --obj-list <path>     Path to obj.json file (default: /app/logs/obj.json)
-  --classes <path>      Path to classes.csv file (default: /docs/classes.csv)
-  --reclassify          Re-process uncategorized files only
-  --list-uncategorized  List uncategorized files without migrating
-  --help, -h            Show this help message
+  --dry-run              Preview changes without executing
+  --verbose, -v          Show detailed output
+  --obj-list <path>      Path to obj.json file (default: /app/logs/obj.json)
+  --classes <path>       Path to classes.csv file (default: /docs/classes.csv)
+  --reclassify           Re-process uncategorized files only
+  --list-uncategorized   List uncategorized files without migrating
+  --scan-all             Scan all files, auto-detect and migrate non-compliant paths
+  --list-non-compliant   List non-compliant files without migrating
+  --help, -h             Show this help message
+
+Standard path format: {type}/{YYYY-MM}/{category1}/{category2}/{filename}
+
+Non-compliant path formats detected:
+  - old-taskid: {type}/{YYYY-MM-DD}/{32-char-hex-taskId}/{filename}
+  - old-flat:   {type}/{YYYY-MM-DD}/{filename}
 `);
     process.exit(0);
   }
@@ -115,6 +130,8 @@ Options:
     classesPath: values.classes ?? '/docs/classes.csv',
     reclassify: values.reclassify ?? false,
     listUncategorized: values['list-uncategorized'] ?? false,
+    scanAll: values['scan-all'] ?? false,
+    listNonCompliant: values['list-non-compliant'] ?? false,
   };
 }
 
@@ -127,8 +144,13 @@ async function checkPrerequisites(options: MigrationOptions): Promise<void> {
   // Check MinIO connection
   await checkMinioConnection();
 
-  // For reclassify mode, we don't need obj.json
-  if (!options.reclassify && !options.listUncategorized) {
+  // For scan-all, reclassify, list modes - we don't need obj.json
+  const needsObjJson = !options.reclassify &&
+                       !options.listUncategorized &&
+                       !options.scanAll &&
+                       !options.listNonCompliant;
+
+  if (needsObjJson) {
     if (!existsSync(options.objListPath)) {
       throw new Error(`Object list not found: ${options.objListPath}`);
     }
@@ -334,6 +356,136 @@ async function listUncategorized(): Promise<void> {
 }
 
 /**
+ * Scan all files and migrate non-compliant paths
+ */
+async function runScanAll(
+  options: MigrationOptions,
+  stats: StatsTracker
+): Promise<void> {
+  log('info', 'Scanning all files for non-compliant paths...');
+
+  if (options.dryRun) {
+    log('warn', 'DRY-RUN MODE - No changes will be made');
+  }
+
+  const pairs = await scanBucketForNonCompliant((type, count) => {
+    logVerbose(`Scanned ${type}/: found ${count} non-compliant files`);
+  });
+  log('info', `Found ${pairs.length} non-compliant file pairs`);
+
+  if (pairs.length === 0) {
+    log('success', 'All files are compliant with standard path format');
+    return;
+  }
+
+  // Group by violation type for reporting
+  const byType = new Map<string, number>();
+  for (const pair of pairs) {
+    const violationType = getPathViolationType(pair.imagePath);
+    byType.set(violationType, (byType.get(violationType) || 0) + 1);
+  }
+
+  console.log('\nViolation types found:');
+  for (const [type, count] of byType) {
+    console.log(`  ${colors.cyan}${type}${colors.reset}: ${count} pairs`);
+  }
+  console.log('');
+
+  // Process each pair
+  for (const pair of pairs) {
+    await processNonCompliantPair(pair, options, stats);
+  }
+}
+
+/**
+ * Process a single non-compliant file pair
+ */
+async function processNonCompliantPair(
+  pair: FilePair,
+  options: MigrationOptions,
+  stats: StatsTracker
+): Promise<void> {
+  const violationType = getPathViolationType(pair.imagePath);
+  logVerbose(`Processing (${violationType}): ${pair.imagePath}`);
+
+  try {
+    // Download and parse JSON metadata
+    const jsonBuffer = await getObject(pair.jsonPath);
+    const metadata = JSON.parse(jsonBuffer.toString('utf-8'));
+    const labels = extractLabelsFromMetadata(metadata);
+
+    logVerbose(`Labels extracted: ${labels.join(', ') || '(none)'}`);
+
+    // Get category and calculate new paths
+    const category = getCategoryForLabels(labels);
+    const dateMonth = extractDateFromPath(pair.imagePath);
+
+    const newImagePath = calculateNewPath(pair.imagePath, dateMonth, category);
+    const newJsonPath = calculateNewPath(pair.jsonPath, dateMonth, category);
+
+    // Move files
+    if (options.dryRun) {
+      log('info', `[DRY-RUN] Would move (${violationType}):`);
+      console.log(`    ${colors.red}${pair.imagePath}${colors.reset}`);
+      console.log(`    ${colors.green}-> ${newImagePath}${colors.reset}`);
+    } else {
+      await moveObject(pair.imagePath, newImagePath);
+      await moveObject(pair.jsonPath, newJsonPath);
+      log('success', `Migrated: ${pair.imagePath} -> ${newImagePath}`);
+    }
+
+    stats.record('migrated');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    log('error', `Failed to process ${pair.imagePath}: ${msg}`);
+    stats.record('error');
+  }
+}
+
+/**
+ * List non-compliant files only
+ */
+async function listNonCompliant(): Promise<void> {
+  log('info', 'Scanning for non-compliant files...');
+
+  const pairs = await scanBucketForNonCompliant((type, count) => {
+    console.log(`  Scanned ${type}/: ${count} non-compliant files`);
+  });
+
+  if (pairs.length === 0) {
+    log('success', 'All files are compliant with standard path format');
+    return;
+  }
+
+  // Group by violation type
+  const byType = new Map<string, FilePair[]>();
+  for (const pair of pairs) {
+    const violationType = getPathViolationType(pair.imagePath);
+    if (!byType.has(violationType)) {
+      byType.set(violationType, []);
+    }
+    byType.get(violationType)!.push(pair);
+  }
+
+  console.log('\n' + '='.repeat(60));
+  console.log('Non-compliant files by violation type:');
+  console.log('='.repeat(60));
+
+  for (const [type, typePairs] of byType) {
+    console.log(`\n${colors.cyan}[${type}]${colors.reset} (${typePairs.length} pairs):`);
+    for (const pair of typePairs) {
+      console.log(`  ${pair.imagePath}`);
+    }
+  }
+
+  console.log('\n' + '='.repeat(60));
+  console.log(`Total: ${pairs.length} non-compliant file pairs`);
+  console.log('='.repeat(60));
+  console.log(`\nRun with ${colors.yellow}--scan-all${colors.reset} to migrate these files`);
+  console.log(`Run with ${colors.yellow}--scan-all --dry-run${colors.reset} to preview migration`);
+}
+
+/**
  * Main entry point
  */
 async function main(): Promise<void> {
@@ -349,7 +501,13 @@ async function main(): Promise<void> {
 
     const stats = new StatsTracker();
 
-    if (options.listUncategorized) {
+    if (options.listNonCompliant) {
+      await listNonCompliant();
+    } else if (options.scanAll) {
+      await runScanAll(options, stats);
+      stats.complete();
+      console.log(stats.printSummary());
+    } else if (options.listUncategorized) {
       await listUncategorized();
     } else if (options.reclassify) {
       await runReclassify(options, stats);

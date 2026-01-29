@@ -81,6 +81,28 @@ The interceptor recognizes 4 workflow types by matching URL patterns:
 - `MINIO_BUCKET` - Storage bucket name
 - `MINIO_REGION` - MinIO region
 
+## Migration Scripts
+
+Storage migration script for reorganizing files to the standard path format: `{type}/{YYYY-MM}/{category1}/{category2}/{filename}`
+
+```bash
+cd api
+
+# List non-compliant files
+bun run src/scripts/migrate-storage.ts --list-non-compliant
+
+# Preview migration (dry-run)
+bun run src/scripts/migrate-storage.ts --scan-all --dry-run --verbose
+
+# Execute migration
+bun run src/scripts/migrate-storage.ts --scan-all --verbose
+```
+
+**Note**: If you have a proxy configured (e.g., socks5), bypass it for local MinIO access:
+```bash
+NO_PROXY=127.0.0.1 ALL_PROXY= bun run src/scripts/migrate-storage.ts --scan-all
+```
+
 ## Deployment
 
 Use Docker Compose for production deployment:
