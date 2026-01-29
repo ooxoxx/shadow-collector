@@ -139,64 +139,89 @@ shadow-collector/
 
 Migrate files from old directory structure to new category-based structure.
 
-### Prerequisites
+### 标准路径格式
 
-- MinIO connection configured via environment variables
-- `docs/classes.csv` - Category mapping file
-- `logs/obj.json` - Object list (for initial migration)
-
-### Local Usage
-
-```bash
-# Preview changes (dry run)
-bun run migrate -- --dry-run
-
-# Run migration
-bun run migrate
-
-# Verbose output
-bun run migrate -- --verbose
-
-# Reclassify uncategorized files only
-bun run migrate -- --reclassify
-
-# List uncategorized files without migrating
-bun run migrate -- --list-uncategorized
+```
+{type}/{YYYY-MM}/{category1}/{category2}/{filename}
 ```
 
-### Docker Compose Usage
+### 非合规路径类型
 
-#### 1. Prepare obj.json (export object list from MinIO)
+| 类型 | 路径格式 | 描述 |
+|------|----------|------|
+| `old-taskid` | `{type}/{YYYY-MM-DD}/{32-char-hex-taskId}/{filename}` | 旧版按 taskId 组织的路径 |
+| `old-flat` | `{type}/{YYYY-MM-DD}/{filename}` | 旧版扁平路径 |
+| `url-encoded-root` | `%2F...` (bucket 根目录) | URL 编码的路径文件 |
+
+### 命令选项
+
+| 选项 | 描述 |
+|------|------|
+| `--dry-run` | 预览变更，不执行 |
+| `--verbose, -v` | 显示详细输出 |
+| `--scan-all` | 扫描所有文件，自动检测并迁移非合规路径 |
+| `--list-non-compliant` | 列出非合规文件，不执行迁移 |
+| `--reclassify` | 仅重新分类未分类文件 |
+| `--list-uncategorized` | 列出未分类文件，不执行迁移 |
+| `--obj-list <path>` | obj.json 文件路径 (默认: `/app/logs/obj.json`) |
+| `--classes <path>` | classes.csv 文件路径 (默认: `/docs/classes.csv`) |
+
+### 生产环境使用 (Docker Compose)
+
+#### 常用操作
 
 ```bash
+# 1. 列出非合规文件
+docker compose exec api bun run migrate -- --list-non-compliant
+
+# 2. 预览迁移 (dry-run)
+docker compose exec api bun run migrate -- --scan-all --dry-run --verbose
+
+# 3. 执行迁移
+docker compose exec api bun run migrate -- --scan-all --verbose
+
+# 4. 列出未分类文件
+docker compose exec api bun run migrate -- --list-uncategorized
+
+# 5. 重新分类未分类文件
+docker compose exec api bun run migrate -- --reclassify --verbose
+```
+
+#### 初始迁移（需要 obj.json）
+
+如果需要使用 obj.json 进行初始迁移：
+
+```bash
+# 1. 导出对象列表
 docker run --rm --network shadow-collector_shadow-network minio/mc \
   sh -c "mc alias set myminio http://minio:9000 minioadmin minioadmin && \
          mc ls myminio/shadow-collector --recursive --json" > logs/obj.json
+
+# 2. 执行初始迁移
+docker compose exec api bun run migrate -- --verbose
 ```
 
-#### 2. Run migration
+### 本地开发使用
 
 ```bash
-# Dry run (preview changes)
-docker compose exec api bun run migrate -- --dry-run --verbose
+# 列出非合规文件
+bun run migrate -- --list-non-compliant
 
-# Execute migration
-docker compose exec api bun run migrate -- --verbose
+# 预览迁移
+bun run migrate -- --scan-all --dry-run --verbose
 
-# Reclassify uncategorized files only
-docker compose exec api bun run migrate -- --reclassify --verbose
+# 执行迁移
+bun run migrate -- --scan-all --verbose
 
-# List uncategorized files
-docker compose exec api bun run migrate -- --list-uncategorized
+# 列出未分类文件
+bun run migrate -- --list-uncategorized
+
+# 重新分类未分类文件
+bun run migrate -- --reclassify --verbose
 ```
 
-### Options
+**注意**: 如果配置了代理 (如 socks5)，需要绑定本地 MinIO 访问：
 
-| Option | Description |
-|--------|-------------|
-| `--dry-run` | Preview changes without executing |
-| `--verbose, -v` | Show detailed output |
-| `--obj-list <path>` | Path to obj.json file (default: `/app/logs/obj.json`) |
-| `--classes <path>` | Path to classes.csv file (default: `/docs/classes.csv`) |
-| `--reclassify` | Re-process uncategorized files only |
-| `--list-uncategorized` | List uncategorized files without migrating |
+```bash
+NO_PROXY=127.0.0.1 ALL_PROXY= bun run migrate -- --scan-all
+```
