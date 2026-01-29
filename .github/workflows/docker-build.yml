@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
 
 env:
   REGISTRY: ghcr.io
@@ -13,7 +15,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -30,6 +32,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -38,6 +45,8 @@ jobs:
           tags: |
             type=sha,prefix=
             type=raw,value=latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push Docker image
         id: build
@@ -63,6 +72,30 @@ jobs:
           path: /tmp/image.tar.gz
           retention-days: 30
 
+      - name: Package Chrome extension
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p /tmp/extension
+          cp manifest.json background.js content.js interceptor.js options.html options.js options.css /tmp/extension/
+          cd /tmp/extension
+          zip -r /tmp/shadow-collector-extension-v${{ steps.version.outputs.VERSION }}.zip .
+
+      - name: Rename image tarball for release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mv /tmp/image.tar.gz /tmp/shadow-collector-api-v${{ steps.version.outputs.VERSION }}.tar.gz
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            /tmp/shadow-collector-extension-v${{ steps.version.outputs.VERSION }}.zip
+            /tmp/shadow-collector-api-v${{ steps.version.outputs.VERSION }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Output image info
         run: |
           echo "## Docker Image Built Successfully! :rocket:" >> $GITHUB_STEP_SUMMARY
@@ -82,3 +115,12 @@ jobs:
           echo "| Tags | \`latest\`, \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | \`linux/amd64\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Output release info
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Release v${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "A new GitHub Release has been created with:" >> $GITHUB_STEP_SUMMARY
+          echo "- Chrome Extension: \`shadow-collector-extension-v${{ steps.version.outputs.VERSION }}.zip\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker Image: \`shadow-collector-api-v${{ steps.version.outputs.VERSION }}.tar.gz\`" >> $GITHUB_STEP_SUMMARY
