@@ -50,6 +50,14 @@ export function resetS3Client(): void {
   });
 }
 
+/**
+ * Encode S3 object key for CopySource header
+ * Encodes each path segment (for non-ASCII chars) but preserves "/" separators
+ */
+function encodeS3Key(key: string): string {
+  return key.split('/').map(segment => encodeURIComponent(segment)).join('/');
+}
+
 export type LabelType = 'detection' | 'multimodal' | 'text-qa' | 'classify' | 'qa-pair';
 
 interface StoreOptions {
@@ -191,7 +199,7 @@ export async function copyObject(sourceKey: string, destKey: string): Promise<vo
   await s3Client.send(
     new CopyObjectCommand({
       Bucket: env.minio.bucket,
-      CopySource: `${env.minio.bucket}/${sourceKey}`,
+      CopySource: `${env.minio.bucket}/${encodeS3Key(sourceKey)}`,
       Key: destKey,
     })
   );
@@ -213,8 +221,8 @@ export async function deleteObject(key: string): Promise<void> {
  * Move an object (copy + delete)
  */
 export async function moveObject(sourceKey: string, destKey: string): Promise<void> {
-  await copyObject(encodeURIComponent(sourceKey), encodeURIComponent(destKey));
-  await deleteObject(encodeURIComponent(sourceKey));
+  await copyObject(sourceKey, destKey);
+  await deleteObject(sourceKey);
 }
 
 /**
