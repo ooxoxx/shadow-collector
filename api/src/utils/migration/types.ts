@@ -8,6 +8,7 @@
  */
 export interface ObjectEntry {
   key: string;
+  originalKey?: string; // Original key if different (for URL-encoded paths)
   size?: number;
   lastModified?: string;
   etag?: string;
@@ -19,6 +20,8 @@ export interface ObjectEntry {
 export interface FilePair {
   imagePath: string;
   jsonPath: string;
+  originalImagePath?: string; // Original key if URL-encoded
+  originalJsonPath?: string; // Original key if URL-encoded
   labels?: string[];
 }
 

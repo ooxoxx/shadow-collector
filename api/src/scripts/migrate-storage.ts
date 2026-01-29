@@ -117,8 +117,10 @@ Options:
 Standard path format: {type}/{YYYY-MM}/{category1}/{category2}/{filename}
 
 Non-compliant path formats detected:
-  - old-taskid: {type}/{YYYY-MM-DD}/{32-char-hex-taskId}/{filename}
-  - old-flat:   {type}/{YYYY-MM-DD}/{filename}
+  - old-taskid:       {type}/{YYYY-MM-DD}/{32-char-hex-taskId}/{filename}
+  - old-flat:         {type}/{YYYY-MM-DD}/{filename}
+  - url-encoded-root: Files at bucket root with URL-encoded paths
+                      e.g., detection%2F2024-01%2Fcategory%2Ffile.jpg
 `);
     process.exit(0);
   }
@@ -399,6 +401,7 @@ async function runScanAll(
 
 /**
  * Process a single non-compliant file pair
+ * For URL-encoded files, uses originalPath for retrieval and decoded path for destination
  */
 async function processNonCompliantPair(
   pair: FilePair,
@@ -408,15 +411,19 @@ async function processNonCompliantPair(
   const violationType = getPathViolationType(pair.imagePath);
   logVerbose(`Processing (${violationType}): ${pair.imagePath}`);
 
+  // Use original path for retrieval if available (URL-encoded files)
+  const sourceImagePath = pair.originalImagePath ?? pair.imagePath;
+  const sourceJsonPath = pair.originalJsonPath ?? pair.jsonPath;
+
   try {
-    // Download and parse JSON metadata
-    const jsonBuffer = await getObject(pair.jsonPath);
+    // Download and parse JSON metadata using source path
+    const jsonBuffer = await getObject(sourceJsonPath);
     const metadata = JSON.parse(jsonBuffer.toString('utf-8'));
     const labels = extractLabelsFromMetadata(metadata);
 
     logVerbose(`Labels extracted: ${labels.join(', ') || '(none)'}`);
 
-    // Get category and calculate new paths
+    // Get category and calculate new paths (using decoded path)
     const category = getCategoryForLabels(labels);
     const dateMonth = extractDateFromPath(pair.imagePath);
 
@@ -426,11 +433,16 @@ async function processNonCompliantPair(
     // Move files
     if (options.dryRun) {
       log('info', `[DRY-RUN] Would move (${violationType}):`);
-      console.log(`    ${colors.red}${pair.imagePath}${colors.reset}`);
+      if (pair.originalImagePath) {
+        console.log(`    ${colors.yellow}(encoded) ${sourceImagePath}${colors.reset}`);
+        console.log(`    ${colors.red}(decoded) ${pair.imagePath}${colors.reset}`);
+      } else {
+        console.log(`    ${colors.red}${pair.imagePath}${colors.reset}`);
+      }
       console.log(`    ${colors.green}-> ${newImagePath}${colors.reset}`);
     } else {
-      await moveObject(pair.imagePath, newImagePath);
-      await moveObject(pair.jsonPath, newJsonPath);
+      await moveObject(sourceImagePath, newImagePath);
+      await moveObject(sourceJsonPath, newJsonPath);
       log('success', `Migrated: ${pair.imagePath} -> ${newImagePath}`);
     }
 
@@ -474,7 +486,13 @@ async function listNonCompliant(): Promise<void> {
   for (const [type, typePairs] of byType) {
     console.log(`\n${colors.cyan}[${type}]${colors.reset} (${typePairs.length} pairs):`);
     for (const pair of typePairs) {
-      console.log(`  ${pair.imagePath}`);
+      if (pair.originalImagePath) {
+        // URL-encoded file: show both original and decoded paths
+        console.log(`  ${colors.yellow}(encoded)${colors.reset} ${pair.originalImagePath}`);
+        console.log(`  ${colors.blue}(decoded)${colors.reset} ${pair.imagePath}`);
+      } else {
+        console.log(`  ${pair.imagePath}`);
+      }
     }
   }
 

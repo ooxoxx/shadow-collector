@@ -9,3 +9,13 @@ export * from './file-processor';
 export * from './uncategorized';
 export * from './path-validator';
 export * from './bucket-scanner';
+
+// Re-export specific functions for clarity
+export {
+  isUrlEncodedRootPath,
+  decodeRootPath,
+} from './path-validator';
+
+export {
+  scanBucketRootForUrlEncoded,
+} from './bucket-scanner';

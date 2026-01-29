@@ -20,7 +20,7 @@ export type StorageType = (typeof STORAGE_TYPES)[number];
 /**
  * Path violation types
  */
-export type PathViolationType = 'valid' | 'old-taskid' | 'old-flat' | 'unknown';
+export type PathViolationType = 'valid' | 'old-taskid' | 'old-flat' | 'url-encoded-root' | 'unknown';
 
 /**
  * Parsed path information
@@ -46,6 +46,9 @@ const OLD_TASKID_REGEX =
 const OLD_FLAT_REGEX =
   /^(detection|multimodal|text-qa|classify|qa-pair)\/\d{4}-\d{2}-\d{2}\/[^\/]+\.(jpg|jpeg|png|gif|webp|bmp|json)$/i;
 
+// URL-encoded path pattern (contains %2F which decodes to /)
+const URL_ENCODED_SEPARATOR = '%2F';
+
 /**
  * Check if a path matches the standard storage format
  * Format: {type}/{YYYY-MM}/{category1}/{category2}/{filename}
@@ -60,6 +63,11 @@ export function isValidStoragePath(path: string): boolean {
  */
 export function getPathViolationType(path: string): PathViolationType {
   if (!path) return 'unknown';
+
+  // Check for URL-encoded root paths first (they won't match other patterns)
+  if (isUrlEncodedRootPath(path)) {
+    return 'url-encoded-root';
+  }
 
   // Check valid first
   if (VALID_PATH_REGEX.test(path)) {
@@ -147,4 +155,25 @@ export function parseExistingPath(path: string): ParsedPath {
     date,
     filename,
   };
+}
+
+/**
+ * Check if a key is a URL-encoded root path
+ * These are files stored at bucket root with encoded path separators
+ * e.g., "detection%2F2024-01%2Fcategory1%2Fcategory2%2Ffilename.jpg"
+ */
+export function isUrlEncodedRootPath(key: string): boolean {
+  if (!key || !key.includes(URL_ENCODED_SEPARATOR)) {
+    return false;
+  }
+  // Decode and check if it matches expected storage format
+  const decoded = decodeURIComponent(key);
+  return /^(detection|multimodal|text-qa|classify|qa-pair)\//.test(decoded);
+}
+
+/**
+ * Decode a URL-encoded root path
+ */
+export function decodeRootPath(key: string): string {
+  return decodeURIComponent(key);
 }

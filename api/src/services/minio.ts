@@ -227,9 +227,13 @@ export async function moveObject(sourceKey: string, destKey: string): Promise<vo
 
 /**
  * List objects by prefix
+ * @param prefix - Object key prefix to filter by
+ * @param delimiter - Optional delimiter for hierarchical listing (e.g., '/' for root-level only)
+ * @param maxKeys - Optional maximum number of keys to return
  */
 export async function listObjectsByPrefix(
   prefix: string,
+  delimiter?: string,
   maxKeys?: number
 ): Promise<{ key: string; size?: number; lastModified?: Date }[]> {
   const results: { key: string; size?: number; lastModified?: Date }[] = [];
@@ -240,6 +244,7 @@ export async function listObjectsByPrefix(
       new ListObjectsV2Command({
         Bucket: env.minio.bucket,
         Prefix: prefix,
+        Delimiter: delimiter,
         MaxKeys: maxKeys ? Math.min(maxKeys - results.length, 1000) : 1000,
         ContinuationToken: continuationToken,
       })
